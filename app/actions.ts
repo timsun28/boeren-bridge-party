@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import type { Game } from "@/types/game";
 
 export async function createRoom(formData: FormData) {
