@@ -10,17 +10,20 @@ export default class Server implements Party.Server {
     game: Game | undefined;
     static games: Map<string, Game> = new Map();
 
-    // Update onStart to load all games
+    // Update onStart to properly load games
     async onStart() {
+        console.log("Starting server for room:", this.room.id);
         if (this.room.id === "lobby") {
-            await this.loadGames(); // Load all games for lobby
+            await this.loadGames();
             return;
         }
 
-        // For game rooms, just load their specific game
-        this.game = await this.room.storage.get<Game>(this.room.id);
-        if (this.game) {
-            Server.games.set(this.game.id, this.game);
+        // For game rooms, load their specific game
+        const game = await this.room.storage.get<Game>(this.room.id);
+        if (game) {
+            this.game = game;
+            Server.games.set(game.id, game);
+            console.log("Loaded game:", game.id);
         }
     }
 
@@ -338,12 +341,9 @@ export default class Server implements Party.Server {
 
         if (this.room.id === "lobby") {
             console.log("LOBBY: Handling lobby request");
-            // Clear existing games to prevent stale data
-            Server.games.clear();
+            // Ensure games are loaded
             await this.loadGames();
-
             const rooms = this.getAvailableRooms();
-            console.log("LOBBY: Broadcasting rooms update:", rooms);
 
             // Broadcast to all lobby connections
             this.room.broadcast(
@@ -378,8 +378,6 @@ export default class Server implements Party.Server {
             try {
                 const body = (await req.json()) as { maxRounds?: number } & Partial<Game>;
                 console.log("POST: Received game data:", body);
-                const maxRounds = body.maxRounds || 7;
-
                 const game: Game = {
                     ...(body as Game),
                     createdAt: Date.now(),
@@ -389,8 +387,8 @@ export default class Server implements Party.Server {
                     roundConfirmations: {},
                     status: "predicting",
                     started: false,
-                    totalRounds: maxRounds,
-                    tricksPerRound: generateTricksArray(maxRounds),
+                    totalRounds: body.maxRounds || 7,
+                    tricksPerRound: generateTricksArray(body.maxRounds || 7),
                     currentTricks: 1,
                     predictedTricksSum: 0,
                 };
@@ -403,13 +401,13 @@ export default class Server implements Party.Server {
                     url: req.url,
                 });
 
-                // Use IS_PRODUCTION instead
-                if (IS_PRODUCTION) {
-                    const lobbyResponse = await fetch(`${req.url.split("/party/")[0]}/party/lobby`, {
-                        method: "GET",
-                    });
-                    console.log("POST: Lobby response in production:", await lobbyResponse.text());
-                }
+                // Broadcast to all rooms
+                this.room.broadcast(
+                    JSON.stringify({
+                        type: "roomsUpdate",
+                        rooms: this.getAvailableRooms(),
+                    })
+                );
 
                 return new Response(JSON.stringify(game), {
                     headers: {

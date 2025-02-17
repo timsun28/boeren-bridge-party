@@ -36,7 +36,7 @@ export default function Home() {
     //     return () => clearInterval(interval);
     // }, []);
 
-    // Update socket connection
+    // Update socket connection with better error handling
     usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
@@ -45,13 +45,24 @@ export default function Home() {
             refreshRooms();
         },
         onMessage(event) {
-            console.log("Received lobby message:", JSON.parse(event.data));
-            const data = JSON.parse(event.data);
-            if (data.type === "roomsUpdate") {
-                console.log("Updating rooms list:", data.rooms);
-                setRooms(data.rooms);
-                setIsLoading(false);
+            try {
+                const data = JSON.parse(event.data);
+                console.log("Received lobby message:", data);
+                if (data.type === "roomsUpdate" && Array.isArray(data.rooms)) {
+                    setRooms(data.rooms);
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                console.error("Error handling message:", error);
             }
+        },
+        onClose() {
+            console.log("Socket disconnected, attempting to reconnect...");
+            setTimeout(refreshRooms, 1000);
+        },
+        onError(error) {
+            console.error("Socket error:", error);
+            setIsLoading(false);
         },
     });
 
