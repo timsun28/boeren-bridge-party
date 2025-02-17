@@ -6,7 +6,7 @@ async function getGame(id: string) {
         method: "GET",
         next: { revalidate: 0 },
     });
-
+    console.log("Response:", response);
     if (!response.ok) {
         redirect("/");
     }
