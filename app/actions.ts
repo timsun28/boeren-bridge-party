@@ -59,7 +59,5 @@ export async function createRoom(formData: FormData) {
             env: process.env.NEXT_PUBLIC_PARTYKIT_URL,
         });
         throw error;
-    } finally {
-        redirect(`/room/${newGame.id}`);
     }
 }

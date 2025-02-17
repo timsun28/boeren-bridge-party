@@ -4,24 +4,83 @@ import { calculateScore, generateTricksArray } from "./utils/game";
 
 export const games = new Map<string, Game>();
 
-export default class GameServer {
+export default class GameServer implements Party.Server {
     private game?: Game;
 
-    constructor(private room: Party.Room) {}
+    constructor(private room: Party.Room) {
+        console.log("[Game] Server initialized", {
+            roomId: room.id,
+            env: process.env.PARTYKIT_ENV,
+        });
+    }
+
+    async onStart() {
+        console.log("[Game] Server starting", { roomId: this.room.id });
+        await this.loadGame();
+        console.log("[Game] Server started", {
+            roomId: this.room.id,
+            gameLoaded: !!this.game,
+            gameDetails: this.game
+                ? {
+                      id: this.game.id,
+                      name: this.game.name,
+                      players: this.game.players.length,
+                      started: this.game.started,
+                  }
+                : undefined,
+        });
+    }
 
     async loadGame() {
-        this.game = await this.room.storage.get<Game>(this.room.id);
-        if (this.game) {
-            games.set(this.game.id, this.game);
+        console.log("[Game] Loading game from storage", { roomId: this.room.id });
+        try {
+            this.game = await this.room.storage.get<Game>(this.room.id);
+            console.log("[Game] Game loaded", {
+                roomId: this.room.id,
+                gameFound: !!this.game,
+                gameDetails: this.game
+                    ? {
+                          id: this.game.id,
+                          name: this.game.name,
+                          players: this.game.players.length,
+                      }
+                    : undefined,
+            });
+
+            if (this.game) {
+                games.set(this.game.id, this.game);
+            }
+        } catch (error) {
+            console.error("[Game] Error loading game", {
+                roomId: this.room.id,
+                error: error instanceof Error ? error.message : error,
+                stack: error instanceof Error ? error.stack : undefined,
+            });
         }
     }
 
     async saveGame(game: Game) {
-        await this.room.storage.put(game.id, game);
-        games.set(game.id, game);
+        console.log("[Game] Saving game", {
+            roomId: this.room.id,
+            gameId: game.id,
+            players: game.players.length,
+            started: game.started,
+        });
 
-        if (!game.started) {
-            this.broadcastRoomUpdate();
+        try {
+            await this.room.storage.put(game.id, game);
+            games.set(game.id, game);
+            console.log("[Game] Game saved successfully");
+
+            if (!game.started) {
+                this.broadcastRoomUpdate();
+            }
+        } catch (error) {
+            console.error("[Game] Error saving game", {
+                roomId: this.room.id,
+                error: error instanceof Error ? error.message : error,
+                stack: error instanceof Error ? error.stack : undefined,
+            });
         }
     }
 
@@ -36,6 +95,13 @@ export default class GameServer {
     }
 
     async handleRequest(req: Party.Request): Promise<Response> {
+        console.log("[Game] Handling request", {
+            method: req.method,
+            url: req.url,
+            headers: Object.fromEntries(req.headers.entries()),
+            gameId: this.room.id,
+        });
+
         const corsHeaders = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -84,6 +150,10 @@ export default class GameServer {
 
         // Get specific room
         if (req.method === "GET" && this.game) {
+            console.log("[Game] Sending game state", {
+                gameId: this.game.id,
+                players: this.game.players.length,
+            });
             return new Response(JSON.stringify(this.game), {
                 headers: {
                     "Content-Type": "application/json",
@@ -92,6 +162,10 @@ export default class GameServer {
             });
         }
 
+        console.log("[Game] Game not found or invalid method", {
+            method: req.method,
+            gameFound: !!this.game,
+        });
         return new Response("Not found", { status: 404, headers: corsHeaders });
     }
 
