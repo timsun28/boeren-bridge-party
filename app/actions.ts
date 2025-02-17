@@ -4,8 +4,11 @@ import { redirect } from "next/navigation";
 import type { Game } from "@/types/game";
 
 export async function createRoom(formData: FormData) {
+    console.log("Starting createRoom with formData:", Object.fromEntries(formData));
+
     const roomName = formData.get("roomName")?.toString();
     if (!roomName?.trim()) {
+        console.error("Room creation failed: Empty room name");
         throw new Error("Room name is required");
     }
 
@@ -25,16 +28,29 @@ export async function createRoom(formData: FormData) {
         tricksPerRound: [],
     };
 
-    console.log("Creating room with data:", newGame);
-    console.log("Sending request to:", `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`);
+    const url = `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`;
+    console.log("Creating room:", {
+        url,
+        game: newGame,
+        env: {
+            partyKitUrl: process.env.NEXT_PUBLIC_PARTYKIT_URL,
+            nodeEnv: process.env.NODE_ENV,
+        },
+    });
 
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`, {
+        const response = await fetch(url, {
             method: "POST",
             body: JSON.stringify(newGame),
             headers: {
                 "Content-Type": "application/json",
             },
+        });
+
+        console.log("Server response:", {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
         });
 
         if (!response.ok) {
@@ -48,11 +64,15 @@ export async function createRoom(formData: FormData) {
         }
 
         const responseData = await response.json();
-        console.log("Room created successfully:", responseData);
+        console.log("Room created successfully, redirecting to:", `/room/${newGame.id}`);
 
         redirect(`/room/${newGame.id}`);
     } catch (error) {
-        console.error("Error creating room:", error);
+        console.error("Error in createRoom:", {
+            error,
+            message: error instanceof Error ? error.message : "Unknown error",
+            stack: error instanceof Error ? error.stack : undefined,
+        });
         throw error;
     }
 }

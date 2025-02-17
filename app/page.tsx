@@ -59,7 +59,10 @@ export default function Home() {
                 setRooms(data.rooms);
             }
         } catch (error) {
-            console.error("Failed to refresh rooms:", error);
+            // Only log real errors, not redirect "errors"
+            if (!error.message?.includes("NEXT_REDIRECT")) {
+                console.error("Failed to refresh rooms:", error);
+            }
         }
     };
 
@@ -103,7 +106,19 @@ export default function Home() {
                         </div>
                     </div>
                 ) : (
-                    <form action={createRoom} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                    <form
+                        action={async (formData) => {
+                            try {
+                                await createRoom(formData);
+                            } catch (error) {
+                                // Ignore NEXT_REDIRECT errors as they're expected
+                                if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
+                                    console.error("Error creating room:", error);
+                                }
+                            }
+                        }}
+                        className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6"
+                    >
                         <h2 className="text-lg font-semibold mb-4 dark:text-white">Create New Game</h2>
                         <input
                             type="text"
