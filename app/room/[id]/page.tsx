@@ -25,10 +25,13 @@ export default async function Room(props: { params: Params; searchParams: Search
     const id = params.id;
     const playerName = searchParams.player;
 
+    console.log({ id, playerName });
+
     if (!playerName) {
         redirect("/");
     }
 
     const initialGame = await getGame(id);
+    console.log({ initialGame });
     return <RoomClient roomId={id} initialGame={initialGame} playerName={decodeURIComponent(playerName)} />;
 }
