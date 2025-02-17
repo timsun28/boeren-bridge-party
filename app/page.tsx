@@ -9,36 +9,28 @@ const partyUrl = `${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`;
 export const revalidate = 0;
 
 export default async function GameListPage() {
-    try {
-        // Fetch games for server rendering with a GET request to the server
-        const res = await fetch(partyUrl, { next: { revalidate: 0 } });
+    const res = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
+        next: { revalidate: 0 },
+    });
 
-        if (!res.ok) {
-            throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
-        }
+    if (!res.ok) {
+        throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+    }
 
-        const text = await res.text();
-        try {
-            const data = JSON.parse(text);
-            const rooms = (data.rooms ?? []) as Game[];
+    const data = await res.json();
+    const rooms = data.rooms as Game[];
 
-            return (
-                <div className="w-full flex flex-col gap-6">
-                    <h1 className="text-4xl font-medium">Boeren Bridge Games</h1>
+    return (
+        <div className="min-h-screen bg-stone-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="space-y-8">
+                    <div>
+                        <h1 className="text-4xl font-medium text-stone-900">Boeren Bridge</h1>
+                        <p className="mt-2 text-lg text-stone-600">Join a game or create your own</p>
+                    </div>
                     <RoomList initialRooms={rooms} />
                 </div>
-            );
-        } catch (e) {
-            console.error("Failed to parse response:", text);
-            throw e;
-        }
-    } catch (error) {
-        console.error("Error in GameListPage:", error);
-        return (
-            <div className="w-full flex flex-col gap-6">
-                <h1 className="text-4xl font-medium">Boeren Bridge Games</h1>
-                <div className="text-red-500">Failed to load games. Please try again later.</div>
             </div>
-        );
-    }
+        </div>
+    );
 }

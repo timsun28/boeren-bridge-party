@@ -68,47 +68,30 @@ export default class GameServer implements Party.Server {
         });
 
         try {
-            // Save to both storages to ensure consistency
-            await this.room.storage.put(this.room.id, game);
+            // Save to storage
             await this.room.storage.put(`${GAMES_PREFIX}${game.id}`, game);
-            games.set(game.id, game);
 
-            // Send to lobby using party fetch
+            // Notify lobby
             const response = await this.room.context.parties.lobby.get(LOBBY_ROOM).fetch("/", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     type: "updateGame",
-                    game: {
-                        ...game,
-                        id: game.id, // Don't replace the prefix
-                    },
+                    game,
                 }),
             });
 
             if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`Lobby update failed (${response.status}): ${text}`);
+                throw new Error(`Lobby update failed: ${response.status}`);
             }
 
-            const result = await response.json();
             console.log("[Game] Game saved successfully", {
                 version: GAME_VERSION,
                 gameId: game.id,
-                lobbyResponse: result,
             });
-
-            if (!game.started) {
-                this.broadcastRoomUpdate();
-            }
         } catch (error) {
-            console.error("[Game] Error saving game", {
-                version: GAME_VERSION,
-                error: error instanceof Error ? error.message : error,
-                stack: error instanceof Error ? error.stack : undefined,
-            });
+            console.error("[Game] Error saving game:", error);
+            throw error;
         }
     }
 

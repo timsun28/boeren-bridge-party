@@ -4,10 +4,6 @@
     "compatibilityDate": "2025-02-16",
     "main": "party/main.ts",
     "parties": {
-        "lobby": "party/lobby.ts",
-        "game": "party/gameServer.ts"
-    },
-    "serve": {
-        "path": "party/public"
+        "main": "party/index.ts"
     }
 }

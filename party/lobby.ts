@@ -1,21 +1,20 @@
 //@ts-nocheck
 import type * as Party from "partykit/server";
 import type { Game } from "@/types/game";
-import { games } from "@/party/gameServer";
-import { json, notFound } from "@/party/utils/response";
+import { json } from "@/party/utils/response";
 
-const GAMES_PREFIX = "games/";
-const LOBBY_VERSION = "v1.0.13";
-
-// Add singleton room ID like the chat example
 export const SINGLETON_ROOM_ID = "lobby";
+const LOBBY_VERSION = "v1.0.13";
+const GAMES_PREFIX = "games/";
+
+// Store games in the lobby's storage
+const games = new Map<string, Game>();
 
 export default class LobbyServer implements Party.Server {
     constructor(private room: Party.Room) {
         console.log("[Lobby] Server initialized", {
             version: LOBBY_VERSION,
             roomId: room.id,
-            env: process.env.PARTYKIT_ENV,
         });
     }
 
@@ -24,7 +23,6 @@ export default class LobbyServer implements Party.Server {
         await this.loadGames();
         console.log("[Lobby] Server started", {
             version: LOBBY_VERSION,
-            roomId: this.room.id,
             gamesLoaded: games.size,
         });
     }
@@ -32,162 +30,82 @@ export default class LobbyServer implements Party.Server {
     private async loadGames() {
         console.log("[Lobby] Loading games from storage", { version: LOBBY_VERSION });
         try {
-            // Clear existing games to prevent stale data
+            const gameKeys = await this.room.storage.list({ prefix: GAMES_PREFIX });
             games.clear();
 
-            // Load from storage
-            const gameKeys = await this.room.storage.list({ prefix: GAMES_PREFIX });
-            console.log("[Lobby] Found game keys:", {
-                version: LOBBY_VERSION,
-                count: gameKeys.size,
-                keys: Array.from(gameKeys.keys()),
-            });
-
-            for (const [key, gameData] of gameKeys) {
-                const game = gameData as Game;
+            for (const [key, value] of gameKeys) {
                 const gameId = key.replace(GAMES_PREFIX, "");
-                // Store without prefix in the Map
-                games.set(gameId, {
-                    ...game,
-                    id: gameId, // Ensure ID is without prefix
-                });
+                const game = value as Game;
+                games.set(gameId, game);
             }
-        } catch (error) {
-            console.error("[Lobby] Error loading games:", {
+
+            console.log("[Lobby] Games loaded", {
                 version: LOBBY_VERSION,
-                error: error instanceof Error ? error.message : error,
+                count: games.size,
+                games: Array.from(games.keys()),
             });
+        } catch (error) {
+            console.error("[Lobby] Error loading games:", error);
         }
     }
 
-    async onRequest(req: Party.Request): Promise<Response> {
+    async onRequest(req: Party.Request) {
         console.log("[Lobby] Handling request", {
             version: LOBBY_VERSION,
             method: req.method,
             url: req.url,
         });
 
-        // Only allow requests to the singleton lobby
-        if (this.room.id !== SINGLETON_ROOM_ID) return notFound();
-
-        // Load games first to ensure we have latest state
+        // Always load latest games before responding
         await this.loadGames();
 
         if (req.method === "POST") {
-            try {
-                const body = await req.json();
-                console.log("[Lobby] Received POST request", {
-                    version: LOBBY_VERSION,
-                    type: body.type,
-                    gameId: body.game?.id,
-                });
-
-                if (body.type === "updateGame" && body.game) {
-                    const gameId = body.game.id.replace(GAMES_PREFIX, "");
-                    const game = {
-                        ...body.game,
-                        id: gameId, // Store without prefix
-                    };
-
-                    // Save to storage with prefix
-                    await this.room.storage.put(`${GAMES_PREFIX}${gameId}`, game);
-                    // Store in Map without prefix
-                    games.set(gameId, game);
-
-                    // Broadcast update to all connected clients
-                    const rooms = this.getAvailableRooms();
-                    this.room.broadcast(
-                        JSON.stringify({
-                            type: "roomsUpdate",
-                            rooms,
-                        })
-                    );
-
-                    return json({ success: true });
-                }
-            } catch (error) {
-                console.error("[Lobby] Error in POST handler", {
-                    version: LOBBY_VERSION,
-                    error: error instanceof Error ? error.message : error,
-                });
-                return json({ error: "Failed to process request" }, 500);
+            const body = await req.json();
+            if (body.type === "updateGame" && body.game) {
+                const game = body.game as Game;
+                games.set(game.id, game);
+                await this.room.storage.put(`${GAMES_PREFIX}${game.id}`, game);
+                this.broadcastUpdate();
+                return json({ success: true });
             }
         }
 
-        // Get all games from storage
-        const storedGames = await this.room.storage.list({ prefix: GAMES_PREFIX });
-        console.log("[Lobby] Storage state", {
-            version: LOBBY_VERSION,
-            storedGamesCount: storedGames.size,
-            storedGameIds: Array.from(storedGames.keys()),
-        });
-
-        // Update in-memory games from storage
-        for (const [key, gameData] of storedGames) {
-            const game = gameData as Game;
-            const gameId = key.replace(GAMES_PREFIX, "");
-            games.set(gameId, {
-                ...game,
-                id: gameId, // Ensure ID is without prefix
-            });
-        }
-
-        const rooms = this.getAvailableRooms();
-        console.log("[Lobby] Available rooms", {
-            version: LOBBY_VERSION,
-            count: rooms.length,
-            totalGames: games.size,
-            rooms: rooms.map((r) => ({
-                id: r.id,
-                name: r.name,
-                players: r.players.length,
-                started: r.started,
-            })),
-        });
-
+        // Return all games for GET requests
         return json({
             type: "roomsUpdate",
-            rooms,
+            rooms: Array.from(games.values()),
         });
     }
 
-    async onConnect(conn: Party.Connection) {
-        const connections = await this.room.getConnections();
+    onConnect(conn: Party.Connection) {
         console.log("[Lobby] New connection", {
             version: LOBBY_VERSION,
             connectionId: conn.id,
-            totalConnections: connections.size,
         });
 
-        const rooms = this.getAvailableRooms();
-        console.log("[Lobby] Sending rooms to new connection", {
-            version: LOBBY_VERSION,
-            connectionId: conn.id,
-            roomCount: rooms.length,
-        });
-
+        // Send current games to new connection
         conn.send(
             JSON.stringify({
-                version: LOBBY_VERSION,
                 type: "roomsUpdate",
-                rooms,
+                rooms: Array.from(games.values()),
             })
         );
     }
 
-    private getAvailableRooms(): Game[] {
-        const allGames = Array.from(games.values());
-        console.log("[Lobby] Getting available rooms", {
-            version: LOBBY_VERSION,
-            totalGames: allGames.length,
-            gamesMap: allGames.map((game) => ({
-                id: game.id, // Already without prefix
-                name: game.name,
-                players: game.players.length,
-                started: game.started,
-            })),
-        });
+    private broadcastUpdate() {
+        this.room.broadcast(
+            JSON.stringify({
+                type: "roomsUpdate",
+                rooms: Array.from(games.values()),
+            })
+        );
+    }
 
-        return allGames; // Return all games, let the UI handle filtering
+    onMessage(message: string, sender: Party.Connection) {
+        console.log("[Lobby] Message received", {
+            version: LOBBY_VERSION,
+            message,
+            from: sender.id,
+        });
     }
 }

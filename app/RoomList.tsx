@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { Game } from "@/types/game";
-import usePartySocket from "partysocket/react";
+import { usePartySocket } from "partysocket/react";
 import { SINGLETON_ROOM_ID } from "@/party/lobby";
-import { createRoom } from "@/app/actions";
+import Link from "next/link";
+import { PARTYKIT_HOST } from "@/app/env";
+import ConnectionStatus from "@/app/components/ConnectionStatus";
 
 interface RoomListProps {
     initialRooms: Game[];
@@ -15,21 +17,14 @@ export function RoomList({ initialRooms }: RoomListProps) {
     const [playerName, setPlayerName] = useState("");
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
-    usePartySocket({
-        host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
+    const socket = usePartySocket({
+        host: PARTYKIT_HOST,
+        party: "main",
         room: SINGLETON_ROOM_ID,
-        onOpen() {
-            console.log("[RoomList] Connected to lobby");
-        },
         onMessage(event) {
-            try {
-                const data = JSON.parse(event.data);
-                console.log("[RoomList] Received message:", data);
-                if (data.type === "roomsUpdate" && Array.isArray(data.rooms)) {
-                    setRooms(data.rooms);
-                }
-            } catch (error) {
-                console.error("[RoomList] Error handling message:", error);
+            const data = JSON.parse(event.data);
+            if (data.type === "roomsUpdate") {
+                setRooms(data.rooms);
             }
         },
     });
@@ -45,106 +40,75 @@ export function RoomList({ initialRooms }: RoomListProps) {
     };
 
     return (
-        <div className="space-y-6">
-            {/* Name prompt modal */}
-            {showNamePrompt && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-20">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-lg shadow-lg p-6">
-                        <h2 className="text-xl font-semibold mb-4 dark:text-white">Join Game</h2>
-                        <input
-                            type="text"
-                            value={playerName}
-                            onChange={(e) => setPlayerName(e.target.value)}
-                            className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 dark:text-white mb-4"
-                            placeholder="Enter your name"
-                            autoFocus
-                        />
-                        <div className="flex gap-3">
-                            <button
-                                onClick={confirmJoinRoom}
-                                className="flex-1 px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                            >
-                                Join
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowNamePrompt(false);
-                                    setSelectedRoomId(null);
-                                }}
-                                className="px-4 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Create game form */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold mb-4 dark:text-white">Create New Game</h2>
-                <form
-                    action={async (formData) => {
-                        try {
-                            await createRoom(formData);
-                        } catch (error) {
-                            if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
-                                console.error("Error creating room:", error);
-                            }
-                        }
-                    }}
-                >
-                    <input
-                        type="text"
-                        name="roomName"
-                        placeholder="Enter game name"
-                        className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 dark:text-white mb-4"
-                        required
-                    />
-                    <button
-                        type="submit"
-                        className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                    >
-                        Create Game
-                    </button>
-                </form>
-            </div>
-
-            {/* Game list */}
-            <div>
-                <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-3">Available Games</h2>
-                <div className="space-y-2">
-                    {rooms.map((room) => (
-                        <div
-                            key={room.id}
-                            className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow"
-                        >
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                                        {room.name || "Unnamed Game"}
-                                    </h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                                        Players: {room.players.length}
-                                    </p>
-                                </div>
+        <>
+            <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Create New Game Card */}
+                <li className="col-span-1">
+                    <div className="rounded-lg bg-white outline outline-1 outline-stone-200 shadow hover:shadow-md">
+                        <form action="/api/create-room" method="POST" className="p-6">
+                            <div className="flex flex-col gap-4">
+                                <h3 className="font-medium">Create New Game</h3>
+                                <input
+                                    type="text"
+                                    name="roomName"
+                                    placeholder="Game Name"
+                                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
                                 <button
-                                    onClick={() => handleJoinRoom(room.id)}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                    type="submit"
+                                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                                 >
-                                    {room.started ? "Spectate" : "Join"}
+                                    Create Game
                                 </button>
                             </div>
+                        </form>
+                    </div>
+                </li>
+
+                {/* Game List */}
+                {rooms.map((room) => (
+                    <li key={room.id} className="col-span-1">
+                        <div className="rounded-lg bg-white outline outline-1 outline-stone-200 shadow hover:shadow-md">
+                            <div className="p-6 space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="font-medium">{room.name || "Unnamed Game"}</h3>
+                                        <p className="text-sm text-stone-500">
+                                            {room.players.length} player{room.players.length !== 1 && "s"}
+                                        </p>
+                                    </div>
+                                    <span className="bg-stone-100 text-stone-600 rounded-full px-2 py-1 text-sm">
+                                        {room.started ? "In Progress" : "Waiting"}
+                                    </span>
+                                </div>
+
+                                {/* Player List */}
+                                {room.players.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-medium text-stone-500">Players</h4>
+                                        <ul className="space-y-1">
+                                            {room.players.map((player) => (
+                                                <li key={player.id} className="text-sm">
+                                                    {player.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <Link
+                                    href={`/room/${room.id}`}
+                                    className="block w-full text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    {room.started ? "Spectate" : "Join Game"}
+                                </Link>
+                            </div>
                         </div>
-                    ))}
-                    {rooms.length === 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center">
-                            <p className="text-gray-500">No games available yet.</p>
-                            <p className="text-sm text-gray-400 mt-1">Create one above to get started!</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
+                    </li>
+                ))}
+            </ul>
+            <ConnectionStatus socket={socket} />
+        </>
     );
 }
