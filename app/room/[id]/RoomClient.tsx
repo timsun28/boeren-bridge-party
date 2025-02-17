@@ -332,40 +332,44 @@ export default function RoomClient({ roomId, initialGame }: { roomId: string; in
             </div>
 
             <div className="space-y-8 w-full items-center flex flex-col">
-                <div className="text-center">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-                        {canPredict ? "Predict your tricks" : "Predictions locked"}
-                    </h2>
-                    {renderTrickButtons(handlePredictTricks, !canPredict, true)}
-                    {predictedTricks !== undefined && !currentPlayer?.predictedTricks && (
-                        <button
-                            onClick={handleConfirmPrediction}
-                            className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                            Confirm Prediction: {predictedTricks}
-                        </button>
-                    )}
-                </div>
+                {game?.status === "predicting" && (
+                    <div className="text-center">
+                        <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                            {canPredict ? "Predict your tricks" : "Predictions locked"}
+                        </h2>
+                        {renderTrickButtons(handlePredictTricks, !canPredict, true)}
+                        {predictedTricks !== undefined && !currentPlayer?.predictedTricks && (
+                            <button
+                                onClick={handleConfirmPrediction}
+                                className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                                Confirm Prediction: {predictedTricks}
+                            </button>
+                        )}
+                    </div>
+                )}
 
-                <div className="text-center">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-                        {canSubmitActual ? "Actual tricks taken" : "Waiting for predictions"}
-                    </h2>
-                    {renderTrickButtons(handleActualTricks, !canSubmitActual, false)}
-                    {tempActualTricks !== undefined && canSubmitActual && (
-                        <button
-                            onClick={handleConfirmActual}
-                            className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                            Confirm Actual Tricks: {tempActualTricks}
-                        </button>
-                    )}
-                    {currentPlayer?.actualTricks !== undefined && (
-                        <div className="mt-2 text-gray-600 dark:text-gray-400">
-                            Submitted tricks: {currentPlayer.actualTricks}
-                        </div>
-                    )}
-                </div>
+                {game?.status === "playing" && (
+                    <div className="text-center">
+                        <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
+                            Actual tricks taken
+                        </h2>
+                        {renderTrickButtons(handleActualTricks, !canSubmitActual, false)}
+                        {tempActualTricks !== undefined && canSubmitActual && (
+                            <button
+                                onClick={handleConfirmActual}
+                                className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                                Confirm Actual Tricks: {tempActualTricks}
+                            </button>
+                        )}
+                        {currentPlayer?.actualTricks !== undefined && (
+                            <div className="mt-2 text-gray-600 dark:text-gray-400">
+                                Submitted tricks: {currentPlayer.actualTricks}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {needsConfirmation && (
                     <button
