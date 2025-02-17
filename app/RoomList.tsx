@@ -21,6 +21,7 @@ export function RoomList({ initialRooms }: RoomListProps) {
             console.log("Socket connected to lobby");
         },
         onMessage(event) {
+            console.log({ event });
             try {
                 const data = JSON.parse(event.data);
                 console.log("Received lobby message:", data);
