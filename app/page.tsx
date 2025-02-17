@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Game } from "@/types/game";
 import usePartySocket from "partysocket/react";
 import { createRoom } from "@/app/actions";
