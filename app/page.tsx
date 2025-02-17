@@ -60,7 +60,7 @@ export default function Home() {
             }
         } catch (error) {
             // Only log real errors, not redirect "errors"
-            if (!error.message?.includes("NEXT_REDIRECT")) {
+            if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
                 console.error("Failed to refresh rooms:", error);
             }
         }
