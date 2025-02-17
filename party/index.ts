@@ -2,28 +2,34 @@ import type * as Party from "partykit/server";
 import type { Game, Player, Round } from "@/types/game";
 import { generateTricksArray } from "@/types/game";
 
+const IS_PRODUCTION = process.env.PARTYKIT_ENV === "production";
+
 export default class Server implements Party.Server {
     constructor(readonly room: Party.Room) {}
 
     game: Game | undefined;
     static games: Map<string, Game> = new Map();
 
-    // Load game data when server starts
+    // Update onStart to load all games
     async onStart() {
         if (this.room.id === "lobby") {
-            return; // Lobby room doesn't need game data
+            await this.loadGames(); // Load all games for lobby
+            return;
         }
 
+        // For game rooms, just load their specific game
         this.game = await this.room.storage.get<Game>(this.room.id);
         if (this.game) {
             Server.games.set(this.game.id, this.game);
         }
     }
 
-    // Helper to save game state
+    // Update saveGame method to use individual keys
     async saveGame(game: Game) {
+        // Save game under its own ID
         await this.room.storage.put(game.id, game);
         Server.games.set(game.id, game);
+        console.log("Saved game:", game.id);
     }
 
     calculateScore(predicted: number, actual: number): number {
@@ -332,10 +338,21 @@ export default class Server implements Party.Server {
 
         if (this.room.id === "lobby") {
             console.log("LOBBY: Handling lobby request");
-            await this.loadGames(); // Load games before getting available rooms
-            console.log("LOBBY: Current games in memory:", Array.from(Server.games.entries()));
+            // Clear existing games to prevent stale data
+            Server.games.clear();
+            await this.loadGames();
+
             const rooms = this.getAvailableRooms();
-            console.log("LOBBY: Sending rooms to client:", rooms);
+            console.log("LOBBY: Broadcasting rooms update:", rooms);
+
+            // Broadcast to all lobby connections
+            this.room.broadcast(
+                JSON.stringify({
+                    type: "roomsUpdate",
+                    rooms,
+                })
+            );
+
             return new Response(
                 JSON.stringify({
                     type: "roomsUpdate",
@@ -352,7 +369,12 @@ export default class Server implements Party.Server {
 
         // Handle room creation
         if (req.method === "POST") {
-            console.log("POST: Creating new game room");
+            console.log("POST: Creating new game room in env:", {
+                partyKitEnv: process.env.PARTYKIT_ENV,
+                isProduction: IS_PRODUCTION,
+                url: req.url,
+            });
+
             try {
                 const body = (await req.json()) as { maxRounds?: number } & Partial<Game>;
                 console.log("POST: Received game data:", body);
@@ -374,17 +396,20 @@ export default class Server implements Party.Server {
                 };
 
                 await this.saveGame(game);
-                console.log("POST: Game saved to storage, current games:", Array.from(Server.games.entries()));
+                console.log("POST: Storage after save:", {
+                    gameId: game.id,
+                    storageKeys: Array.from((await this.room.storage.list()).entries()),
+                    partyKitEnv: process.env.PARTYKIT_ENV,
+                    url: req.url,
+                });
 
-                // Broadcast update
-                console.log("POST: Broadcasting room update to lobby");
-                this.room.broadcast(
-                    JSON.stringify({
-                        type: "roomsUpdate",
-                        rooms: this.getAvailableRooms(),
-                    })
-                );
-                console.log("POST: Broadcast complete");
+                // Use IS_PRODUCTION instead
+                if (IS_PRODUCTION) {
+                    const lobbyResponse = await fetch(`${req.url.split("/party/")[0]}/party/lobby`, {
+                        method: "GET",
+                    });
+                    console.log("POST: Lobby response in production:", await lobbyResponse.text());
+                }
 
                 return new Response(JSON.stringify(game), {
                     headers: {
@@ -419,19 +444,21 @@ export default class Server implements Party.Server {
         });
     }
 
-    // Add a method to load all games from storage
+    // Update loadGames method to use list()
     private async loadGames() {
-        console.log("Loading all games from storage");
-        const keys = await this.room.storage.list();
-        console.log("Found storage keys:", keys);
+        console.log("Loading games from storage");
+        try {
+            const items = await this.room.storage.list();
+            console.log("Storage items:", Array.from(items.entries()));
 
-        for (const [key] of keys) {
-            // Destructure to get just the key string
-            const game = await this.room.storage.get<Game>(key);
-            if (game && !game.started) {
-                console.log("Loading game from storage:", game.id);
-                Server.games.set(game.id, game);
+            for (const [key, value] of items) {
+                const game = value as Game;
+                if (!game.started) {
+                    Server.games.set(game.id, game);
+                }
             }
+        } catch (error) {
+            console.error("Error loading games:", error);
         }
     }
 }

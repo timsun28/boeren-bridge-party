@@ -9,11 +9,13 @@ export default function Home() {
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [playerName, setPlayerName] = useState("");
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // Add refresh function
+    // Update refresh function
     const refreshRooms = async () => {
         console.log("Manually refreshing rooms");
         try {
+            setIsLoading(true);
             const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`);
             console.log("Refresh response:", response.status);
             const data = await response.json();
@@ -23,6 +25,8 @@ export default function Home() {
             }
         } catch (error) {
             console.error("Refresh error:", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -32,7 +36,7 @@ export default function Home() {
     //     return () => clearInterval(interval);
     // }, []);
 
-    // Connect to lobby for real-time room updates
+    // Update socket connection
     usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
@@ -46,6 +50,7 @@ export default function Home() {
             if (data.type === "roomsUpdate") {
                 console.log("Updating rooms list:", data.rooms);
                 setRooms(data.rooms);
+                setIsLoading(false);
             }
         },
     });
