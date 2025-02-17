@@ -1,6 +1,13 @@
 {
-  "$schema": "https://www.partykit.io/schema.json",
-  "name": "boeren-bridge-party-party",
-  "main": "party/index.ts",
-  "compatibilityDate": "2025-02-16"
+    "$schema": "https://www.partykit.io/schema.json",
+    "name": "boeren-bridge-party",
+    "compatibilityDate": "2025-02-16",
+    "main": "party/index.ts",
+    "parties": {
+        "lobby": "party/lobby.ts",
+        "game": "party/gameServer.ts"
+    },
+    "serve": {
+        "path": "party/public"
+    }
 }
