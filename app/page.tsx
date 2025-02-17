@@ -26,11 +26,11 @@ export default function Home() {
         }
     };
 
-    // Add auto-refresh interval
-    useEffect(() => {
-        const interval = setInterval(refreshRooms, 5000); // Refresh every 5 seconds
-        return () => clearInterval(interval);
-    }, []);
+    // // Add auto-refresh interval
+    // useEffect(() => {
+    //     const interval = setInterval(refreshRooms, 5000); // Refresh every 5 seconds
+    //     return () => clearInterval(interval);
+    // }, []);
 
     // Connect to lobby for real-time room updates
     usePartySocket({

@@ -14,7 +14,7 @@ export default class Server implements Party.Server {
             return; // Lobby room doesn't need game data
         }
 
-        this.game = await this.room.storage.get<Game>("game");
+        this.game = await this.room.storage.get<Game>(this.room.id);
         if (this.game) {
             Server.games.set(this.game.id, this.game);
         }
@@ -22,7 +22,7 @@ export default class Server implements Party.Server {
 
     // Helper to save game state
     async saveGame(game: Game) {
-        await this.room.storage.put("game", game);
+        await this.room.storage.put(game.id, game);
         Server.games.set(game.id, game);
     }
 
@@ -332,6 +332,7 @@ export default class Server implements Party.Server {
 
         if (this.room.id === "lobby") {
             console.log("LOBBY: Handling lobby request");
+            await this.loadGames(); // Load games before getting available rooms
             console.log("LOBBY: Current games in memory:", Array.from(Server.games.entries()));
             const rooms = this.getAvailableRooms();
             console.log("LOBBY: Sending rooms to client:", rooms);
@@ -416,6 +417,22 @@ export default class Server implements Party.Server {
             status: 404,
             headers: corsHeaders,
         });
+    }
+
+    // Add a method to load all games from storage
+    private async loadGames() {
+        console.log("Loading all games from storage");
+        const keys = await this.room.storage.list();
+        console.log("Found storage keys:", keys);
+
+        for (const [key] of keys) {
+            // Destructure to get just the key string
+            const game = await this.room.storage.get<Game>(key);
+            if (game && !game.started) {
+                console.log("Loading game from storage:", game.id);
+                Server.games.set(game.id, game);
+            }
+        }
     }
 }
 
