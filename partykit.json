@@ -2,8 +2,8 @@
     "$schema": "https://www.partykit.io/schema.json",
     "name": "boeren-bridge-party",
     "compatibilityDate": "2025-02-16",
-    "main": "party/main.ts",
+    "main": "party/index.ts",
     "parties": {
-        "main": "party/index.ts"
+        "lobby": "party/index.ts"
     }
 }

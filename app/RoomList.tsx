@@ -13,13 +13,10 @@ interface RoomListProps {
 
 export function RoomList({ initialRooms }: RoomListProps) {
     const [rooms, setRooms] = useState<Game[]>(initialRooms);
-    const [showNamePrompt, setShowNamePrompt] = useState(false);
-    const [playerName, setPlayerName] = useState("");
-    const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
     const socket = usePartySocket({
         host: PARTYKIT_HOST,
-        party: "main",
+        party: "lobby",
         room: SINGLETON_ROOM_ID,
         onMessage(event) {
             const data = JSON.parse(event.data);
@@ -29,22 +26,12 @@ export function RoomList({ initialRooms }: RoomListProps) {
         },
     });
 
-    const handleJoinRoom = (roomId: string) => {
-        setSelectedRoomId(roomId);
-        setShowNamePrompt(true);
-    };
-
-    const confirmJoinRoom = () => {
-        if (!playerName.trim() || !selectedRoomId) return;
-        window.location.href = `/game/${selectedRoomId}?player=${encodeURIComponent(playerName)}`;
-    };
-
     return (
         <>
             <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {/* Create New Game Card */}
                 <li className="col-span-1">
-                    <div className="rounded-lg bg-white outline outline-1 outline-stone-200 shadow hover:shadow-md">
+                    <div className="rounded-lg bg-white outline-1 outline-stone-200 shadow hover:shadow-md">
                         <form action="/api/create-room" method="POST" className="p-6">
                             <div className="flex flex-col gap-4">
                                 <h3 className="font-medium">Create New Game</h3>
@@ -69,7 +56,7 @@ export function RoomList({ initialRooms }: RoomListProps) {
                 {/* Game List */}
                 {rooms.map((room) => (
                     <li key={room.id} className="col-span-1">
-                        <div className="rounded-lg bg-white outline outline-1 outline-stone-200 shadow hover:shadow-md">
+                        <div className="rounded-lg bg-white outline-1 outline-stone-200 shadow hover:shadow-md">
                             <div className="p-6 space-y-4">
                                 <div className="flex justify-between items-start">
                                     <div>

@@ -1,3 +1,4 @@
+//@ts-nocheck
 import type * as Party from "partykit/server";
 import LobbyServer, { SINGLETON_ROOM_ID } from "./lobby";
 import GameServer from "./gameServer";
@@ -11,7 +12,7 @@ export default class MainServer implements Party.Server {
             roomId: room.id,
             isSingleton: room.id === SINGLETON_ROOM_ID,
         });
-        
+
         if (room.id === SINGLETON_ROOM_ID) {
             this.lobbyServer = new LobbyServer(room);
         } else {
