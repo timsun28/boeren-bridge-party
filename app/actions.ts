@@ -18,6 +18,11 @@ export async function createRoom(formData: FormData) {
         rounds: [],
         roundConfirmations: {},
         status: "predicting",
+        currentTricks: 0,
+        predictedTricksSum: 0,
+        started: false,
+        totalRounds: 0,
+        tricksPerRound: [],
     };
 
     console.log("Creating room with data:", newGame);
