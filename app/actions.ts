@@ -66,8 +66,6 @@ export async function createRoom(formData: FormData) {
         const responseData = await response.json();
         console.log("Room created successfully:", responseData);
         console.log("Room created successfully, redirecting to:", `/room/${newGame.id}`);
-
-        redirect(`/room/${newGame.id}`);
     } catch (error) {
         console.error("Error in createRoom:", {
             error,
@@ -75,5 +73,7 @@ export async function createRoom(formData: FormData) {
             stack: error instanceof Error ? error.stack : undefined,
         });
         throw error;
+    } finally {
+        redirect(`/room/${newGame.id}`);
     }
 }
