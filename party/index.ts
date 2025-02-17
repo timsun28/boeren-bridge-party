@@ -372,9 +372,8 @@ export default class Server implements Party.Server {
                 await this.saveGame(game);
                 this.game = game;
 
-                // Broadcast to lobby that a new game was created
-                const lobby = await this.room.context.parties.main.get("lobby");
-                lobby.broadcast(
+                // Broadcast to all connected lobby clients
+                this.room.broadcast(
                     JSON.stringify({
                         type: "roomsUpdate",
                         rooms: this.getAvailableRooms(),
