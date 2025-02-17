@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Game } from "@/types/game";
 import usePartySocket from "partysocket/react";
+import { SINGLETON_ROOM_ID } from "@/party/lobby";
 import { createRoom } from "@/app/actions";
 
 interface RoomListProps {
@@ -16,20 +17,19 @@ export function RoomList({ initialRooms }: RoomListProps) {
 
     usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
-        room: "lobby",
+        room: SINGLETON_ROOM_ID,
         onOpen() {
-            console.log("Socket connected to lobby");
+            console.log("[RoomList] Connected to lobby");
         },
         onMessage(event) {
-            console.log({ event });
             try {
                 const data = JSON.parse(event.data);
-                console.log("Received lobby message:", data);
+                console.log("[RoomList] Received message:", data);
                 if (data.type === "roomsUpdate" && Array.isArray(data.rooms)) {
                     setRooms(data.rooms);
                 }
             } catch (error) {
-                console.error("Error handling message:", error);
+                console.error("[RoomList] Error handling message:", error);
             }
         },
     });
@@ -41,8 +41,16 @@ export function RoomList({ initialRooms }: RoomListProps) {
 
     const confirmJoinRoom = () => {
         if (!playerName.trim() || !selectedRoomId) return;
-        window.location.href = `/room/${selectedRoomId}?player=${encodeURIComponent(playerName)}`;
+        window.location.href = `/game/${selectedRoomId}?player=${encodeURIComponent(playerName)}`;
     };
+
+    if (rooms.length === 0) {
+        return (
+            <div className="text-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+                <p className="text-gray-600 dark:text-gray-300">No active games. Create one to get started!</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -108,29 +116,30 @@ export function RoomList({ initialRooms }: RoomListProps) {
                 </form>
             </div>
 
-            <div>
-                <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-3">Available Games</h2>
-                <div className="space-y-2">
-                    {rooms.map((room) => (
-                        <button
-                            key={room.id}
-                            onClick={() => handleJoinRoom(room.id)}
-                            className="w-full bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4"
-                        >
-                            <div className="flex-1">
-                                <h3 className="font-medium text-gray-900 dark:text-white">{room.name}</h3>
-                                <p className="text-sm text-gray-500">{room.players.length} players</p>
+            <div className="grid gap-4">
+                {rooms.map((room) => (
+                    <div
+                        key={room.id}
+                        className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow"
+                    >
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                                    {room.name || "Unnamed Game"}
+                                </h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">
+                                    Players: {room.players.length}
+                                </p>
                             </div>
-                            <span className="text-blue-500">Join →</span>
-                        </button>
-                    ))}
-                    {rooms.length === 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center">
-                            <p className="text-gray-500">No games available yet.</p>
-                            <p className="text-sm text-gray-400 mt-1">Create one to get started!</p>
+                            <button
+                                onClick={() => handleJoinRoom(room.id)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            >
+                                {room.started ? "Spectate" : "Join"}
+                            </button>
                         </div>
-                    )}
-                </div>
+                    </div>
+                ))}
             </div>
         </div>
     );

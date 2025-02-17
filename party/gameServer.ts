@@ -1,83 +1,110 @@
 import type * as Party from "partykit/server";
 import type { Game, Player, Round } from "@/types/game";
-import { calculateScore, generateTricksArray } from "./utils/game";
+import { generateTricksArray } from "@/party/utils/game";
 
+// Make games Map persistent across server restarts
+const GAMES_KEY = "games";
+const GAME_VERSION = "v1.0.11"; // Add version indicator
 export const games = new Map<string, Game>();
+
+const GAMES_PREFIX = "games/";
+
+const LOBBY_ROOM = "lobby";
 
 export default class GameServer implements Party.Server {
     private game?: Game;
 
     constructor(private room: Party.Room) {
         console.log("[Game] Server initialized", {
+            version: GAME_VERSION,
             roomId: room.id,
             env: process.env.PARTYKIT_ENV,
         });
     }
 
     async onStart() {
-        console.log("[Game] Server starting", { roomId: this.room.id });
+        console.log("[Game] Server starting", {
+            version: GAME_VERSION,
+            roomId: this.room.id,
+        });
         await this.loadGame();
         console.log("[Game] Server started", {
+            version: GAME_VERSION,
             roomId: this.room.id,
             gameLoaded: !!this.game,
-            gameDetails: this.game
-                ? {
-                      id: this.game.id,
-                      name: this.game.name,
-                      players: this.game.players.length,
-                      started: this.game.started,
-                  }
-                : undefined,
         });
     }
 
     async loadGame() {
-        console.log("[Game] Loading game from storage", { roomId: this.room.id });
+        console.log("[Game] Loading game from storage", {
+            version: GAME_VERSION,
+            roomId: this.room.id,
+        });
         try {
             this.game = await this.room.storage.get<Game>(this.room.id);
             console.log("[Game] Game loaded", {
+                version: GAME_VERSION,
                 roomId: this.room.id,
                 gameFound: !!this.game,
-                gameDetails: this.game
-                    ? {
-                          id: this.game.id,
-                          name: this.game.name,
-                          players: this.game.players.length,
-                      }
-                    : undefined,
             });
 
             if (this.game) {
+                await this.room.storage.put(`${GAMES_PREFIX}${this.room.id}`, this.game);
                 games.set(this.game.id, this.game);
             }
         } catch (error) {
             console.error("[Game] Error loading game", {
-                roomId: this.room.id,
+                version: GAME_VERSION,
                 error: error instanceof Error ? error.message : error,
-                stack: error instanceof Error ? error.stack : undefined,
             });
         }
     }
 
     async saveGame(game: Game) {
         console.log("[Game] Saving game", {
+            version: GAME_VERSION,
             roomId: this.room.id,
             gameId: game.id,
-            players: game.players.length,
-            started: game.started,
         });
 
         try {
-            await this.room.storage.put(game.id, game);
+            // Save to this room's storage
+            await this.room.storage.put(this.room.id, game);
             games.set(game.id, game);
-            console.log("[Game] Game saved successfully");
+
+            // Send to lobby using party fetch
+            const response = await this.room.context.parties.lobby.get("lobby").fetch("/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    type: "updateGame",
+                    game: {
+                        ...game,
+                        id: game.id.replace(GAMES_PREFIX, ""),
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Lobby update failed (${response.status}): ${text}`);
+            }
+
+            const result = await response.json();
+            console.log("[Game] Game saved successfully", {
+                version: GAME_VERSION,
+                gameId: game.id,
+                lobbyResponse: result,
+            });
 
             if (!game.started) {
                 this.broadcastRoomUpdate();
             }
         } catch (error) {
             console.error("[Game] Error saving game", {
-                roomId: this.room.id,
+                version: GAME_VERSION,
                 error: error instanceof Error ? error.message : error,
                 stack: error instanceof Error ? error.stack : undefined,
             });
@@ -94,8 +121,9 @@ export default class GameServer implements Party.Server {
         );
     }
 
-    async handleRequest(req: Party.Request): Promise<Response> {
+    async onRequest(req: Party.Request): Promise<Response> {
         console.log("[Game] Handling request", {
+            version: GAME_VERSION,
             method: req.method,
             url: req.url,
             headers: Object.fromEntries(req.headers.entries()),
@@ -151,6 +179,7 @@ export default class GameServer implements Party.Server {
         // Get specific room
         if (req.method === "GET" && this.game) {
             console.log("[Game] Sending game state", {
+                version: GAME_VERSION,
                 gameId: this.game.id,
                 players: this.game.players.length,
             });
@@ -163,6 +192,7 @@ export default class GameServer implements Party.Server {
         }
 
         console.log("[Game] Game not found or invalid method", {
+            version: GAME_VERSION,
             method: req.method,
             gameFound: !!this.game,
         });

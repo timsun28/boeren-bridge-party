@@ -1,13 +1,13 @@
 import type * as Party from "partykit/server";
-import LobbyServer from "./lobby";
+import LobbyServer, { SINGLETON_ROOM_ID } from "./lobby";
 import GameServer from "./gameServer";
 
-export default class Server implements Party.Server {
+export default class MainServer implements Party.Server {
     private lobbyServer?: LobbyServer;
     private gameServer?: GameServer;
 
-    constructor(readonly room: Party.Room) {
-        if (room.id === "lobby") {
+    constructor(private room: Party.Room) {
+        if (room.id === SINGLETON_ROOM_ID) {
             this.lobbyServer = new LobbyServer(room);
         } else {
             this.gameServer = new GameServer(room);
@@ -20,10 +20,10 @@ export default class Server implements Party.Server {
     }
 
     async onRequest(req: Party.Request): Promise<Response> {
-        if (this.room.id === "lobby") {
-            return this.lobbyServer?.handleRequest(req) ?? new Response("Not found", { status: 404 });
+        if (this.room.id === SINGLETON_ROOM_ID) {
+            return this.lobbyServer?.onRequest(req) ?? new Response("Not found", { status: 404 });
         }
-        return this.gameServer?.handleRequest(req) ?? new Response("Not found", { status: 404 });
+        return this.gameServer?.onRequest(req) ?? new Response("Not found", { status: 404 });
     }
 
     onConnect(conn: Party.Connection) {
@@ -40,4 +40,4 @@ export default class Server implements Party.Server {
     }
 }
 
-Server satisfies Party.Worker;
+MainServer satisfies Party.Worker;
