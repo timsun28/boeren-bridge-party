@@ -3,13 +3,17 @@ import { useState, useEffect } from "react";
 import type { Game, Player } from "@/types/game";
 import usePartySocket from "partysocket/react";
 
-export default function RoomClient({ roomId, initialGame }: { roomId: string; initialGame?: Game }) {
+interface RoomClientProps {
+    roomId: string;
+    initialGame?: Game;
+    playerName: string;
+}
+
+export default function RoomClient({ roomId, initialGame, playerName }: RoomClientProps) {
     const [game, setGame] = useState<Game | null>(initialGame || null);
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
     const [predictedTricks, setPredictedTricks] = useState<number | null>(null);
     const [tempActualTricks, setTempActualTricks] = useState<number | null>(null);
-
-    const playerName = typeof window !== "undefined" ? window.localStorage.getItem("playerName") : null;
 
     useEffect(() => {
         if (!playerName) {

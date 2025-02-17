@@ -15,13 +15,20 @@ async function getGame(id: string) {
     return response.json();
 }
 
-interface PageProps {
-    params: Promise<{ id: string }>;
-}
+type Params = Promise<{ id: string }>;
+type SearchParams = Promise<{ player?: string }>;
 
-export default async function Room({ params }: PageProps) {
-    const resolvedParams = await params;
-    const initialGame = await getGame(resolvedParams.id);
+export default async function Room(props: { params: Params; searchParams: SearchParams }) {
+    const params = await props.params;
+    const searchParams = await props.searchParams;
 
-    return <RoomClient roomId={resolvedParams.id} initialGame={initialGame} />;
+    const id = params.id;
+    const playerName = searchParams.player;
+
+    if (!playerName) {
+        redirect("/");
+    }
+
+    const initialGame = await getGame(id);
+    return <RoomClient roomId={id} initialGame={initialGame} playerName={decodeURIComponent(playerName)} />;
 }

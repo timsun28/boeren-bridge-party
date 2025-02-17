@@ -365,13 +365,21 @@ export default class Server implements Party.Server {
                     started: false,
                     totalRounds: maxRounds,
                     tricksPerRound: generateTricksArray(maxRounds),
-                    currentTricks: 1, // Start with 1 trick
+                    currentTricks: 1,
                     predictedTricksSum: 0,
                 };
 
                 await this.saveGame(game);
                 this.game = game;
-                console.log("Game saved successfully:", game);
+
+                // Broadcast to lobby that a new game was created
+                const lobby = await this.room.context.parties.main.get("lobby");
+                lobby.broadcast(
+                    JSON.stringify({
+                        type: "roomsUpdate",
+                        rooms: this.getAvailableRooms(),
+                    })
+                );
 
                 return new Response(JSON.stringify(game), {
                     headers: {

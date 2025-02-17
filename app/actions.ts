@@ -24,33 +24,21 @@ export async function createRoom(formData: FormData) {
         currentTricks: 0,
         predictedTricksSum: 0,
         started: false,
-        totalRounds: 0,
+        totalRounds: 7, // Set a default value
         tricksPerRound: [],
     };
 
-    const url = `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`;
-    console.log("Creating room:", {
-        url,
-        game: newGame,
-        env: {
-            partyKitUrl: process.env.NEXT_PUBLIC_PARTYKIT_URL,
-            nodeEnv: process.env.NODE_ENV,
-        },
-    });
-
     try {
+        const url = `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`;
+        console.log("Attempting to create room at:", url);
+
         const response = await fetch(url, {
             method: "POST",
             body: JSON.stringify(newGame),
             headers: {
                 "Content-Type": "application/json",
             },
-        });
-
-        console.log("Server response:", {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
+            cache: "no-store",
         });
 
         if (!response.ok) {
@@ -63,14 +51,12 @@ export async function createRoom(formData: FormData) {
             throw new Error(`Failed to create room: ${response.status} ${response.statusText}`);
         }
 
-        const responseData = await response.json();
-        console.log("Room created successfully:", responseData);
         console.log("Room created successfully, redirecting to:", `/room/${newGame.id}`);
     } catch (error) {
         console.error("Error in createRoom:", {
             error,
-            message: error instanceof Error ? error.message : "Unknown error",
-            stack: error instanceof Error ? error.stack : undefined,
+            url: `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`,
+            env: process.env.NEXT_PUBLIC_PARTYKIT_URL,
         });
         throw error;
     } finally {

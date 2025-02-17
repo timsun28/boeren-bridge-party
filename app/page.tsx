@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Game } from "@/types/game";
 import usePartySocket from "partysocket/react";
 import { createRoom } from "@/app/actions";
@@ -10,23 +10,36 @@ export default function Home() {
     const [playerName, setPlayerName] = useState("");
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
+    // Add refresh function
+    const refreshRooms = async () => {
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`, {
+                method: "GET",
+                next: { revalidate: 0 },
+            });
+            const data = await response.json();
+            if (data.type === "roomsUpdate") {
+                setRooms(data.rooms);
+            }
+        } catch (error) {
+            if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
+                console.error("Failed to refresh rooms:", error);
+            }
+        }
+    };
+
+    // Add auto-refresh interval
+    useEffect(() => {
+        const interval = setInterval(refreshRooms, 5000); // Refresh every 5 seconds
+        return () => clearInterval(interval);
+    }, []);
+
     // Connect to lobby for real-time room updates
     usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
         onOpen() {
-            // Initial fetch when socket connects
-            fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`, {
-                method: "GET",
-                next: { revalidate: 0 },
-            })
-                .then((res) => res.json())
-                .then((data) => {
-                    if (data.type === "roomsUpdate") {
-                        setRooms(data.rooms);
-                    }
-                })
-                .catch(console.error);
+            refreshRooms(); // Refresh immediately when socket connects
         },
         onMessage(event) {
             const data = JSON.parse(event.data);
@@ -43,27 +56,7 @@ export default function Home() {
 
     const confirmJoinRoom = () => {
         if (!playerName.trim() || !selectedRoomId) return;
-        window.localStorage.setItem("playerName", playerName);
-        window.location.href = `/room/${selectedRoomId}`;
-    };
-
-    // Add this function to handle manual refresh
-    const handleRefresh = async () => {
-        try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`, {
-                method: "GET",
-                next: { revalidate: 0 },
-            });
-            const data = await response.json();
-            if (data.type === "roomsUpdate") {
-                setRooms(data.rooms);
-            }
-        } catch (error) {
-            // Only log real errors, not redirect "errors"
-            if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
-                console.error("Failed to refresh rooms:", error);
-            }
-        }
+        window.location.href = `/room/${selectedRoomId}?player=${encodeURIComponent(playerName)}`;
     };
 
     return (
@@ -141,7 +134,7 @@ export default function Home() {
                     <div className="flex justify-between items-center mb-3">
                         <h2 className="text-lg font-medium text-gray-800 dark:text-white">Available Games</h2>
                         <button
-                            onClick={handleRefresh}
+                            onClick={refreshRooms}
                             className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-500"
                         >
                             <svg
