@@ -27,12 +27,30 @@ export default class Server implements Party.Server {
         }
     }
 
-    // Update saveGame method to use individual keys
+    // Update broadcastRoomUpdate method
+    private broadcastRoomUpdate() {
+        const rooms = this.getAvailableRooms();
+        console.log("Broadcasting room update:", rooms);
+
+        // Broadcast directly from current room
+        this.room.broadcast(
+            JSON.stringify({
+                type: "roomsUpdate",
+                rooms,
+            })
+        );
+    }
+
+    // Update saveGame method
     async saveGame(game: Game) {
-        // Save game under its own ID
         await this.room.storage.put(game.id, game);
         Server.games.set(game.id, game);
         console.log("Saved game:", game.id);
+
+        // Broadcast room update after saving
+        if (!game.started) {
+            this.broadcastRoomUpdate();
+        }
     }
 
     calculateScore(predicted: number, actual: number): number {

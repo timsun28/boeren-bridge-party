@@ -9,13 +9,11 @@ export default function Home() {
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [playerName, setPlayerName] = useState("");
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
 
     // Update refresh function
     const refreshRooms = async () => {
         console.log("Manually refreshing rooms");
         try {
-            setIsLoading(true);
             const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`);
             console.log("Refresh response:", response.status);
             const data = await response.json();
@@ -26,7 +24,6 @@ export default function Home() {
         } catch (error) {
             console.error("Refresh error:", error);
         } finally {
-            setIsLoading(false);
         }
     };
 
@@ -36,21 +33,22 @@ export default function Home() {
     //     return () => clearInterval(interval);
     // }, []);
 
-    // Update socket connection with better error handling
-    usePartySocket({
+    // Update socket connection with better error handling and reconnection
+    const socket = usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
         onOpen() {
             console.log("Socket connected to lobby");
-            refreshRooms();
+            // Send refresh request on connection
+            socket.send(JSON.stringify({ type: "refreshRooms" }));
         },
         onMessage(event) {
             try {
                 const data = JSON.parse(event.data);
                 console.log("Received lobby message:", data);
                 if (data.type === "roomsUpdate" && Array.isArray(data.rooms)) {
+                    console.log("Updating rooms:", data.rooms);
                     setRooms(data.rooms);
-                    setIsLoading(false);
                 }
             } catch (error) {
                 console.error("Error handling message:", error);
@@ -58,11 +56,6 @@ export default function Home() {
         },
         onClose() {
             console.log("Socket disconnected, attempting to reconnect...");
-            setTimeout(refreshRooms, 1000);
-        },
-        onError(error) {
-            console.error("Socket error:", error);
-            setIsLoading(false);
         },
     });
 
