@@ -7,7 +7,8 @@ async function getGame(id: string) {
         next: { revalidate: 0 },
     });
     console.log("Response:", response);
-    if (!response.ok) {
+    console.log("Response status:", response.status);
+    if (response.status !== 200) {
         redirect("/");
     }
 
