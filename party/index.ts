@@ -351,8 +351,8 @@ export default class Server implements Party.Server {
         if (req.method === "POST") {
             console.log("Handling POST request for room:", this.room.id);
             try {
-                const body = await req.json();
-                const maxRounds = body.maxRounds || 7; // Default to 7 rounds
+                const body = (await req.json()) as { maxRounds?: number } & Partial<Game>;
+                const maxRounds = body.maxRounds || 7;
 
                 const game: Game = {
                     ...(body as Game),
@@ -398,6 +398,12 @@ export default class Server implements Party.Server {
                 },
             });
         }
+
+        // Return 404 for any unhandled requests
+        return new Response("Not found", {
+            status: 404,
+            headers: corsHeaders,
+        });
     }
 }
 
