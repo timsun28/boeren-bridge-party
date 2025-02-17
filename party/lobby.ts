@@ -5,7 +5,7 @@ import { games } from "@/party/gameServer";
 import { json, notFound } from "@/party/utils/response";
 
 const GAMES_PREFIX = "games/";
-const LOBBY_VERSION = "v1.0.11";
+const LOBBY_VERSION = "v1.0.12";
 
 // Add singleton room ID like the chat example
 export const SINGLETON_ROOM_ID = "lobby";
@@ -32,27 +32,26 @@ export default class LobbyServer implements Party.Server {
     private async loadGames() {
         console.log("[Lobby] Loading games from storage", { version: LOBBY_VERSION });
         try {
-            // Load directly from lobby storage
-            const gameKeys = await this.room.storage.list();
+            // Clear existing games to prevent stale data
+            games.clear();
+
+            // Load from storage using singleton room ID
+            const gameKeys = await this.room.context.storage.list({ prefix: GAMES_PREFIX });
             console.log("[Lobby] Found game keys:", {
                 version: LOBBY_VERSION,
                 count: gameKeys.size,
                 keys: Array.from(gameKeys.keys()),
             });
 
-            for (const [key, _] of gameKeys) {
-                if (!key.startsWith("games/")) continue;
-
-                const game = await this.room.storage.get<Game>(key);
-                if (game) {
-                    games.set(game.id, game);
-                    console.log("[Lobby] Loaded game:", {
-                        version: LOBBY_VERSION,
-                        id: game.id,
-                        name: game.name,
-                        key,
-                    });
-                }
+            for (const [key, game] of gameKeys) {
+                const gameId = key.replace(GAMES_PREFIX, "");
+                games.set(gameId, game as Game);
+                console.log("[Lobby] Loaded game:", {
+                    version: LOBBY_VERSION,
+                    id: gameId,
+                    name: (game as Game).name,
+                    key,
+                });
             }
         } catch (error) {
             console.error("[Lobby] Error loading games:", {
@@ -72,6 +71,9 @@ export default class LobbyServer implements Party.Server {
         // Only allow requests to the singleton lobby
         if (this.room.id !== SINGLETON_ROOM_ID) return notFound();
 
+        // Load games first to ensure we have latest state
+        await this.loadGames();
+
         if (req.method === "POST") {
             try {
                 const body = await req.json();
@@ -83,15 +85,18 @@ export default class LobbyServer implements Party.Server {
 
                 if (body.type === "updateGame" && body.game) {
                     const gameId = body.game.id.replace(GAMES_PREFIX, "");
-                    await this.room.storage.put(`${GAMES_PREFIX}${gameId}`, body.game);
+                    // Store in context storage instead of room storage
+                    await this.room.context.storage.put(`${GAMES_PREFIX}${gameId}`, body.game);
                     games.set(gameId, body.game);
 
-                    console.log("[Lobby] Game updated via POST", {
-                        version: LOBBY_VERSION,
-                        gameId,
-                        key: `${GAMES_PREFIX}${gameId}`,
-                        totalGames: games.size,
-                    });
+                    // Broadcast update to all connected clients
+                    const rooms = this.getAvailableRooms();
+                    this.room.broadcast(
+                        JSON.stringify({
+                            type: "roomsUpdate",
+                            rooms,
+                        })
+                    );
 
                     return json({ success: true });
                 }
@@ -105,7 +110,7 @@ export default class LobbyServer implements Party.Server {
         }
 
         // Get all games from storage
-        const storedGames = await this.room.storage.list({ prefix: GAMES_PREFIX });
+        const storedGames = await this.room.context.storage.list({ prefix: GAMES_PREFIX });
         console.log("[Lobby] Storage state", {
             version: LOBBY_VERSION,
             storedGamesCount: storedGames.size,
@@ -113,8 +118,9 @@ export default class LobbyServer implements Party.Server {
         });
 
         // Update in-memory games from storage
-        for (const [id, game] of storedGames) {
-            games.set(id, game as Game);
+        for (const [key, game] of storedGames) {
+            const gameId = key.replace(GAMES_PREFIX, "");
+            games.set(gameId, game as Game);
         }
 
         const rooms = this.getAvailableRooms();
@@ -130,20 +136,9 @@ export default class LobbyServer implements Party.Server {
             })),
         });
 
-        const response = {
+        return json({
             type: "roomsUpdate",
             rooms,
-        };
-
-        console.log("[Lobby] Sending response", {
-            version: LOBBY_VERSION,
-            type: response.type,
-            roomCount: rooms.length,
-        });
-        return new Response(JSON.stringify(response), {
-            headers: {
-                "Content-Type": "application/json",
-            },
         });
     }
 

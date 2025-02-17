@@ -4,7 +4,7 @@ import { generateTricksArray } from "@/party/utils/game";
 
 // Make games Map persistent across server restarts
 const GAMES_KEY = "games";
-const GAME_VERSION = "v1.0.11"; // Add version indicator
+const GAME_VERSION = "v1.0.12"; // Add version indicator
 export const games = new Map<string, Game>();
 
 const GAMES_PREFIX = "games/";
