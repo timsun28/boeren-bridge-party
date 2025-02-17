@@ -11,8 +11,8 @@ const nextConfig = {
                 destination: `${PARTYKIT_URL}/party/:path*`,
             },
             {
-                source: "/parties/:path*",
-                destination: `${PARTYKIT_URL}/parties/:path*`,
+                source: "/parties/:party/:path*",
+                destination: `${PARTYKIT_URL}/parties/:party/:path*`,
             },
         ];
     },
