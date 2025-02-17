@@ -4,7 +4,7 @@ import { generateTricksArray } from "@/party/utils/game";
 
 // Make games Map persistent across server restarts
 const GAMES_KEY = "games";
-const GAME_VERSION = "v1.0.12"; // Add version indicator
+const GAME_VERSION = "v1.0.13"; // Add version indicator
 export const games = new Map<string, Game>();
 
 const GAMES_PREFIX = "games/";
@@ -68,12 +68,13 @@ export default class GameServer implements Party.Server {
         });
 
         try {
-            // Save to this room's storage
+            // Save to both storages to ensure consistency
             await this.room.storage.put(this.room.id, game);
+            await this.room.storage.put(`${GAMES_PREFIX}${game.id}`, game);
             games.set(game.id, game);
 
             // Send to lobby using party fetch
-            const response = await this.room.context.parties.lobby.get("lobby").fetch("/", {
+            const response = await this.room.context.parties.lobby.get(LOBBY_ROOM).fetch("/", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -82,7 +83,7 @@ export default class GameServer implements Party.Server {
                     type: "updateGame",
                     game: {
                         ...game,
-                        id: game.id.replace(GAMES_PREFIX, ""),
+                        id: game.id, // Don't replace the prefix
                     },
                 }),
             });

@@ -5,7 +5,7 @@ import { games } from "@/party/gameServer";
 import { json, notFound } from "@/party/utils/response";
 
 const GAMES_PREFIX = "games/";
-const LOBBY_VERSION = "v1.0.12";
+const LOBBY_VERSION = "v1.0.13";
 
 // Add singleton room ID like the chat example
 export const SINGLETON_ROOM_ID = "lobby";
@@ -35,8 +35,8 @@ export default class LobbyServer implements Party.Server {
             // Clear existing games to prevent stale data
             games.clear();
 
-            // Load from storage using singleton room ID
-            const gameKeys = await this.room.context.storage.list({ prefix: GAMES_PREFIX });
+            // Load from storage
+            const gameKeys = await this.room.storage.list({ prefix: GAMES_PREFIX });
             console.log("[Lobby] Found game keys:", {
                 version: LOBBY_VERSION,
                 count: gameKeys.size,
@@ -44,7 +44,8 @@ export default class LobbyServer implements Party.Server {
             });
 
             for (const [key, game] of gameKeys) {
-                const gameId = key.replace(GAMES_PREFIX, "");
+                // Handle both prefixed and unprefixed IDs
+                const gameId = game.id.startsWith(GAMES_PREFIX) ? game.id : `${GAMES_PREFIX}${game.id}`;
                 games.set(gameId, game as Game);
                 console.log("[Lobby] Loaded game:", {
                     version: LOBBY_VERSION,
@@ -85,8 +86,8 @@ export default class LobbyServer implements Party.Server {
 
                 if (body.type === "updateGame" && body.game) {
                     const gameId = body.game.id.replace(GAMES_PREFIX, "");
-                    // Store in context storage instead of room storage
-                    await this.room.context.storage.put(`${GAMES_PREFIX}${gameId}`, body.game);
+                    // Use room.storage instead of room.context.storage
+                    await this.room.storage.put(`${GAMES_PREFIX}${gameId}`, body.game);
                     games.set(gameId, body.game);
 
                     // Broadcast update to all connected clients
@@ -110,7 +111,7 @@ export default class LobbyServer implements Party.Server {
         }
 
         // Get all games from storage
-        const storedGames = await this.room.context.storage.list({ prefix: GAMES_PREFIX });
+        const storedGames = await this.room.storage.list({ prefix: GAMES_PREFIX });
         console.log("[Lobby] Storage state", {
             version: LOBBY_VERSION,
             storedGamesCount: storedGames.size,
@@ -171,14 +172,14 @@ export default class LobbyServer implements Party.Server {
         console.log("[Lobby] Getting available rooms", {
             version: LOBBY_VERSION,
             totalGames: allGames.length,
-            gamesMap: Array.from(games.entries()).map(([id, game]) => ({
-                id,
+            gamesMap: allGames.map((game) => ({
+                id: game.id.replace(GAMES_PREFIX, ""), // Always return unprefixed IDs
                 name: game.name,
                 players: game.players.length,
                 started: game.started,
             })),
         });
 
-        return allGames.filter((game: Game) => !game.started).sort((a: Game, b: Game) => b.createdAt - a.createdAt);
+        return allGames; // Return all games, let the UI handle filtering
     }
 }
