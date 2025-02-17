@@ -43,15 +43,13 @@ export default class LobbyServer implements Party.Server {
                 keys: Array.from(gameKeys.keys()),
             });
 
-            for (const [key, game] of gameKeys) {
-                // Handle both prefixed and unprefixed IDs
-                const gameId = game.id.startsWith(GAMES_PREFIX) ? game.id : `${GAMES_PREFIX}${game.id}`;
-                games.set(gameId, game as Game);
-                console.log("[Lobby] Loaded game:", {
-                    version: LOBBY_VERSION,
-                    id: gameId,
-                    name: (game as Game).name,
-                    key,
+            for (const [key, gameData] of gameKeys) {
+                const game = gameData as Game;
+                const gameId = key.replace(GAMES_PREFIX, "");
+                // Store without prefix in the Map
+                games.set(gameId, {
+                    ...game,
+                    id: gameId, // Ensure ID is without prefix
                 });
             }
         } catch (error) {
@@ -86,9 +84,15 @@ export default class LobbyServer implements Party.Server {
 
                 if (body.type === "updateGame" && body.game) {
                     const gameId = body.game.id.replace(GAMES_PREFIX, "");
-                    // Use room.storage instead of room.context.storage
-                    await this.room.storage.put(`${GAMES_PREFIX}${gameId}`, body.game);
-                    games.set(gameId, body.game);
+                    const game = {
+                        ...body.game,
+                        id: gameId, // Store without prefix
+                    };
+
+                    // Save to storage with prefix
+                    await this.room.storage.put(`${GAMES_PREFIX}${gameId}`, game);
+                    // Store in Map without prefix
+                    games.set(gameId, game);
 
                     // Broadcast update to all connected clients
                     const rooms = this.getAvailableRooms();
@@ -119,9 +123,13 @@ export default class LobbyServer implements Party.Server {
         });
 
         // Update in-memory games from storage
-        for (const [key, game] of storedGames) {
+        for (const [key, gameData] of storedGames) {
+            const game = gameData as Game;
             const gameId = key.replace(GAMES_PREFIX, "");
-            games.set(gameId, game as Game);
+            games.set(gameId, {
+                ...game,
+                id: gameId, // Ensure ID is without prefix
+            });
         }
 
         const rooms = this.getAvailableRooms();
@@ -173,7 +181,7 @@ export default class LobbyServer implements Party.Server {
             version: LOBBY_VERSION,
             totalGames: allGames.length,
             gamesMap: allGames.map((game) => ({
-                id: game.id.replace(GAMES_PREFIX, ""), // Always return unprefixed IDs
+                id: game.id, // Already without prefix
                 name: game.name,
                 players: game.players.length,
                 started: game.started,

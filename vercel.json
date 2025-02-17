@@ -16,15 +16,5 @@
                 }
             ]
         }
-    ],
-    "rewrites": [
-        {
-            "source": "/party/:path*",
-            "destination": "https://boeren-bridge-party.timsun28.partykit.dev/party/:path*"
-        },
-        {
-            "source": "/parties/:path*",
-            "destination": "https://boeren-bridge-party.timsun28.partykit.dev/parties/:path*"
-        }
     ]
 }
