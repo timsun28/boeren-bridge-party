@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import type { Game } from "@/types/game";
-import usePartySocket from "partysocket/react";
 import { createRoom } from "@/app/actions";
 
 export default function Home() {
