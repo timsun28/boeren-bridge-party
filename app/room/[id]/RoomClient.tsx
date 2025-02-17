@@ -7,7 +7,6 @@ export default function RoomClient({ roomId, initialGame }: { roomId: string; in
     const [game, setGame] = useState<Game | null>(initialGame || null);
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
     const [predictedTricks, setPredictedTricks] = useState<number | null>(null);
-    const [actualTricks, setActualTricks] = useState<number | null>(null);
     const [tempActualTricks, setTempActualTricks] = useState<number | null>(null);
 
     const playerName = typeof window !== "undefined" ? window.localStorage.getItem("playerName") : null;

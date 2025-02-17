@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Game } from "@/types/game";
 import usePartySocket from "partysocket/react";
 import { createRoom } from "@/app/actions";
@@ -9,32 +9,6 @@ export default function Home() {
     const [showNamePrompt, setShowNamePrompt] = useState(false);
     const [playerName, setPlayerName] = useState("");
     const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-
-    // Connect to lobby for real-time room updates
-    const socket = usePartySocket({
-        host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
-        room: "lobby",
-        onOpen() {
-            // Initial fetch when socket connects
-            fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`, {
-                method: "GET",
-                next: { revalidate: 0 },
-            })
-                .then((res) => res.json())
-                .then((data) => {
-                    if (data.type === "roomsUpdate") {
-                        setRooms(data.rooms);
-                    }
-                })
-                .catch(console.error);
-        },
-        onMessage(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === "roomsUpdate") {
-                setRooms(data.rooms);
-            }
-        },
-    });
 
     const handleJoinRoom = (roomId: string) => {
         setSelectedRoomId(roomId);
