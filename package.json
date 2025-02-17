@@ -11,7 +11,8 @@
     "dependencies": {
         "next": "15.1.7",
         "react": "^19.0.0",
-        "react-dom": "^19.0.0"
+        "react-dom": "^19.0.0",
+        "partysocket": "1.0.3"
     },
     "devDependencies": {
         "@eslint/eslintrc": "^3",
@@ -23,6 +24,7 @@
         "eslint-config-next": "15.1.7",
         "postcss": "^8",
         "tailwindcss": "^4.0.0",
-        "typescript": "^5"
+        "typescript": "^5",
+        "partykit": "0.0.111"
     }
 }
