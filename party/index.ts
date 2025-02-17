@@ -35,10 +35,11 @@ export default class Server implements Party.Server {
 
     // Helper function to get available rooms
     private getAvailableRooms() {
+        console.log("Getting available rooms, all games:", Array.from(Server.games.entries()));
         const rooms = Array.from(Server.games.values())
             .filter((g) => !g.started)
             .sort((a, b) => b.createdAt - a.createdAt);
-        console.log("Available rooms:", rooms);
+        console.log("Filtered available rooms:", rooms);
         return rooms;
     }
 
@@ -330,9 +331,10 @@ export default class Server implements Party.Server {
         }
 
         if (this.room.id === "lobby") {
-            console.log("Handling lobby request");
+            console.log("LOBBY: Handling lobby request");
+            console.log("LOBBY: Current games in memory:", Array.from(Server.games.entries()));
             const rooms = this.getAvailableRooms();
-            console.log("Sending rooms to lobby request:", rooms);
+            console.log("LOBBY: Sending rooms to client:", rooms);
             return new Response(
                 JSON.stringify({
                     type: "roomsUpdate",
@@ -349,9 +351,10 @@ export default class Server implements Party.Server {
 
         // Handle room creation
         if (req.method === "POST") {
-            console.log("Handling POST request for room:", this.room.id);
+            console.log("POST: Creating new game room");
             try {
                 const body = (await req.json()) as { maxRounds?: number } & Partial<Game>;
+                console.log("POST: Received game data:", body);
                 const maxRounds = body.maxRounds || 7;
 
                 const game: Game = {
@@ -370,15 +373,17 @@ export default class Server implements Party.Server {
                 };
 
                 await this.saveGame(game);
-                this.game = game;
+                console.log("POST: Game saved to storage, current games:", Array.from(Server.games.entries()));
 
-                // Broadcast to all connected lobby clients
+                // Broadcast update
+                console.log("POST: Broadcasting room update to lobby");
                 this.room.broadcast(
                     JSON.stringify({
                         type: "roomsUpdate",
                         rooms: this.getAvailableRooms(),
                     })
                 );
+                console.log("POST: Broadcast complete");
 
                 return new Response(JSON.stringify(game), {
                     headers: {
@@ -387,7 +392,7 @@ export default class Server implements Party.Server {
                     },
                 });
             } catch (error) {
-                console.error("Error creating room:", error);
+                console.error("POST: Error in room creation:", error);
                 return new Response(JSON.stringify({ error: "Failed to create room", details: error }), {
                     status: 500,
                     headers: { "Content-Type": "application/json" },

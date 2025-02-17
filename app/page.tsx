@@ -12,19 +12,17 @@ export default function Home() {
 
     // Add refresh function
     const refreshRooms = async () => {
+        console.log("Manually refreshing rooms");
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`, {
-                method: "GET",
-                next: { revalidate: 0 },
-            });
+            const response = await fetch(`${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/lobby`);
+            console.log("Refresh response:", response.status);
             const data = await response.json();
+            console.log("Refresh data:", data);
             if (data.type === "roomsUpdate") {
                 setRooms(data.rooms);
             }
         } catch (error) {
-            if (!(error as Error).message?.includes("NEXT_REDIRECT")) {
-                console.error("Failed to refresh rooms:", error);
-            }
+            console.error("Refresh error:", error);
         }
     };
 
@@ -39,11 +37,14 @@ export default function Home() {
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
         onOpen() {
-            refreshRooms(); // Refresh immediately when socket connects
+            console.log("Socket connected to lobby");
+            refreshRooms();
         },
         onMessage(event) {
+            console.log("Received lobby message:", JSON.parse(event.data));
             const data = JSON.parse(event.data);
             if (data.type === "roomsUpdate") {
+                console.log("Updating rooms list:", data.rooms);
                 setRooms(data.rooms);
             }
         },
