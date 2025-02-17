@@ -33,14 +33,14 @@ export default function Home() {
     //     return () => clearInterval(interval);
     // }, []);
 
-    // Update socket connection with better error handling and reconnection
+    // Update socket connection with better error handling
     const socket = usePartySocket({
         host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
         room: "lobby",
         onOpen() {
             console.log("Socket connected to lobby");
-            // Send refresh request on connection
-            socket.send(JSON.stringify({ type: "refreshRooms" }));
+            // Request initial room list
+            socket.send(JSON.stringify({ type: "getRooms" }));
         },
         onMessage(event) {
             try {

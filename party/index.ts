@@ -62,11 +62,10 @@ export default class Server implements Party.Server {
 
     // Helper function to get available rooms
     private getAvailableRooms() {
-        console.log("Getting available rooms, all games:", Array.from(Server.games.entries()));
         const rooms = Array.from(Server.games.values())
             .filter((g) => !g.started)
             .sort((a, b) => b.createdAt - a.createdAt);
-        console.log("Filtered available rooms:", rooms);
+        console.log("Available rooms:", rooms);
         return rooms;
     }
 
