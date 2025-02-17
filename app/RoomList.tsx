@@ -44,16 +44,9 @@ export function RoomList({ initialRooms }: RoomListProps) {
         window.location.href = `/game/${selectedRoomId}?player=${encodeURIComponent(playerName)}`;
     };
 
-    if (rooms.length === 0) {
-        return (
-            <div className="text-center p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-                <p className="text-gray-600 dark:text-gray-300">No active games. Create one to get started!</p>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6">
+            {/* Name prompt modal */}
             {showNamePrompt && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-20">
                     <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-lg shadow-lg p-6">
@@ -87,6 +80,7 @@ export function RoomList({ initialRooms }: RoomListProps) {
                 </div>
             )}
 
+            {/* Create game form */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
                 <h2 className="text-lg font-semibold mb-4 dark:text-white">Create New Game</h2>
                 <form
@@ -116,30 +110,40 @@ export function RoomList({ initialRooms }: RoomListProps) {
                 </form>
             </div>
 
-            <div className="grid gap-4">
-                {rooms.map((room) => (
-                    <div
-                        key={room.id}
-                        className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow"
-                    >
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                                    {room.name || "Unnamed Game"}
-                                </h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-300">
-                                    Players: {room.players.length}
-                                </p>
+            {/* Game list */}
+            <div>
+                <h2 className="text-lg font-medium text-gray-800 dark:text-white mb-3">Available Games</h2>
+                <div className="space-y-2">
+                    {rooms.map((room) => (
+                        <div
+                            key={room.id}
+                            className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow"
+                        >
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                                        {room.name || "Unnamed Game"}
+                                    </h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                        Players: {room.players.length}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => handleJoinRoom(room.id)}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                >
+                                    {room.started ? "Spectate" : "Join"}
+                                </button>
                             </div>
-                            <button
-                                onClick={() => handleJoinRoom(room.id)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                            >
-                                {room.started ? "Spectate" : "Join"}
-                            </button>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                    {rooms.length === 0 && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center">
+                            <p className="text-gray-500">No games available yet.</p>
+                            <p className="text-sm text-gray-400 mt-1">Create one above to get started!</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
