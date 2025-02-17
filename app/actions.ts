@@ -64,6 +64,7 @@ export async function createRoom(formData: FormData) {
         }
 
         const responseData = await response.json();
+        console.log("Room created successfully:", responseData);
         console.log("Room created successfully, redirecting to:", `/room/${newGame.id}`);
 
         redirect(`/room/${newGame.id}`);
