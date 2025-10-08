@@ -2,19 +2,20 @@
 import { useState, useEffect } from "react";
 import type { Game, Player } from "@/types/game";
 import usePartySocket from "partysocket/react";
+import { PARTYKIT_HOST } from "@/app/env";
 
 interface RoomClientProps {
     roomId: string;
-    initialGame?: Game;
+    initialGame: Game;
     playerName: string;
 }
 
 export default function RoomClient({ roomId, initialGame, playerName }: RoomClientProps) {
-    const [game, setGame] = useState<Game | null>(initialGame || null);
+    const [game, setGame] = useState<Game | null>(initialGame);
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
     const [predictedTricks, setPredictedTricks] = useState<number | null>(null);
     const [tempActualTricks, setTempActualTricks] = useState<number | null>(null);
-
+    console.log({ game, roomId, playerName, initialGame });
     useEffect(() => {
         if (!playerName) {
             window.location.href = "/";
@@ -22,7 +23,8 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     }, [playerName]);
 
     const socket = usePartySocket({
-        host: process.env.NEXT_PUBLIC_PARTYKIT_HOST!,
+        host: PARTYKIT_HOST,
+        party: "main",
         room: roomId,
         onOpen() {
             if (playerName) {
@@ -43,9 +45,15 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                     setCurrentPlayer(player);
                 }
             } else if (data.type === "error") {
-                alert(data.message);
+                console.error("Game error:", data.message);
                 window.location.href = "/";
             }
+        },
+        onClose() {
+            console.log("Connection closed, attempting to reconnect...");
+        },
+        onError(error) {
+            console.error("WebSocket error:", error);
         },
     });
 

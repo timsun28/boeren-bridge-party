@@ -1,62 +1,33 @@
 "use server";
 
+import { PARTYKIT_URL } from "@/app/env";
 import type { Game } from "@/types/game";
+import { redirect } from "next/navigation";
 
 export async function createRoom(formData: FormData) {
-    console.log("Starting createRoom with formData:", Object.fromEntries(formData));
-
     const roomName = formData.get("roomName")?.toString();
     if (!roomName?.trim()) {
-        console.error("Room creation failed: Empty room name");
         throw new Error("Room name is required");
     }
 
-    const newGame: Game = {
-        id: crypto.randomUUID(),
-        name: roomName,
-        players: [],
-        createdAt: Date.now(),
-        currentRound: 1,
-        rounds: [],
-        roundConfirmations: {},
-        status: "predicting",
-        currentTricks: 0,
-        predictedTricksSum: 0,
-        started: false,
-        totalRounds: 7, // Set a default value
-        tricksPerRound: [],
-    };
+    const response = await fetch(`${PARTYKIT_URL}/party/lobby`, {
+        method: "POST",
+        body: JSON.stringify({
+            type: "createGame",
+            name: roomName,
+        }),
+        headers: {
+            "Content-Type": "application/json",
+        },
+    });
 
-    try {
-        const url = `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`;
-        console.log("Attempting to create room at:", url);
-
-        const response = await fetch(url, {
-            method: "POST",
-            body: JSON.stringify(newGame),
-            headers: {
-                "Content-Type": "application/json",
-            },
-            cache: "no-store",
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Server response error:", {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText,
-            });
-            throw new Error(`Failed to create room: ${response.status} ${response.statusText}`);
-        }
-
-        console.log("Room created successfully, redirecting to:", `/room/${newGame.id}`);
-    } catch (error) {
-        console.error("Error in createRoom:", {
-            error,
-            url: `${process.env.NEXT_PUBLIC_PARTYKIT_URL}/party/${newGame.id}`,
-            env: process.env.NEXT_PUBLIC_PARTYKIT_URL,
-        });
-        throw error;
+    if (!response.ok) {
+        throw new Error("Failed to create room");
     }
+
+    // Get the created game data with its ID
+    const game = await response.json();
+
+    // Redirect to the specific game room using its ID
+    redirect(`/room/${game.id}`);
 }

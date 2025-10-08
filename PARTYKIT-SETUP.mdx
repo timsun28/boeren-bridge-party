@@ -1,0 +1,535 @@
+# Setting Up PartyKit Multiplayer Game
+
+This guide details how to set up a multiplayer game using PartyKit, Next.js, and TypeScript.
+
+## Project Structure
+
+```
+├── app/
+│   ├── components/
+│   │   ├── ConnectionStatus.tsx  # WebSocket connection status indicator
+│   │   └── RoomList.tsx         # List of game rooms
+│   ├── env.ts                   # Environment variable configuration
+│   └── page.tsx                 # Main page with room list
+├── party/
+│   ├── index.ts                 # Main PartyKit server
+│   ├── lobby.ts                 # Lobby server for managing rooms
+│   └── gameServer.ts            # Game server for individual rooms
+├── next.config.js               # Next.js configuration
+├── partykit.json               # PartyKit configuration
+└── vercel.json                 # Vercel deployment configuration
+```
+
+## 1. Environment Setup
+
+Create `app/env.ts` to handle environment variables:
+
+```typescript:app/env.ts
+export const PARTYKIT_HOST = process.env.NEXT_PUBLIC_PARTYKIT_HOST ?? "127.0.0.1:1999";
+export const PARTYKIT_PROTOCOL = 
+    PARTYKIT_HOST?.startsWith("localhost") || PARTYKIT_HOST?.startsWith("127.0.0.1") 
+        ? "http" 
+        : "https";
+export const PARTYKIT_URL = `${process.env.NEXT_PUBLIC_PARTYKIT_PROTOCOL ?? "http"}://${PARTYKIT_HOST}`;
+```
+
+## 2. PartyKit Configuration
+
+Configure PartyKit in `partykit.json`:
+
+```json:partykit.json
+{
+    "$schema": "https://www.partykit.io/schema.json",
+    "name": "boeren-bridge-party",
+    "compatibilityDate": "2025-02-16",
+    "main": "party/index.ts",
+    "parties": {
+        "lobby": "party/index.ts"
+    }
+}
+```
+
+## 3. Next.js Configuration
+
+Set up routing in `next.config.js`:
+
+```javascript:next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+    async rewrites() {
+        const PARTYKIT_URL = process.env.NEXT_PUBLIC_PARTYKIT_HOST
+            ? `https://${process.env.NEXT_PUBLIC_PARTYKIT_HOST}`
+            : "http://127.0.0.1:1999";
+
+        return [
+            {
+                source: "/party/:path*",
+                destination: `${PARTYKIT_URL}/party/:path*`,
+            },
+            {
+                source: "/parties/:party/:path*",
+                destination: `${PARTYKIT_URL}/parties/:party/:path*`,
+            },
+        ];
+    },
+};
+
+module.exports = nextConfig;
+```
+
+## 4. PartyKit Server Implementation
+
+### Main Server (`party/index.ts`)
+
+```typescript:party/index.ts
+import type * as Party from "partykit/server";
+import LobbyServer, { SINGLETON_ROOM_ID } from "./lobby";
+import GameServer from "./gameServer";
+
+export default class MainServer implements Party.Server {
+    private lobbyServer?: LobbyServer;
+    private gameServer?: GameServer;
+
+    constructor(private room: Party.Room) {
+        console.log("[Main] Initializing server", {
+            roomId: room.id,
+            isSingleton: room.id === SINGLETON_ROOM_ID,
+        });
+        
+        if (room.id === SINGLETON_ROOM_ID) {
+            this.lobbyServer = new LobbyServer(room);
+        } else {
+            this.gameServer = new GameServer(room);
+        }
+    }
+
+    async onStart() {
+        if (this.lobbyServer) {
+            await this.lobbyServer.onStart();
+        } else if (this.gameServer) {
+            await this.gameServer.onStart();
+        }
+    }
+
+    async onRequest(req: Party.Request): Promise<Response> {
+        if (this.lobbyServer) {
+            return this.lobbyServer.onRequest(req);
+        } else if (this.gameServer) {
+            return this.gameServer.onRequest(req);
+        }
+        return new Response("Not found", { status: 404 });
+    }
+
+    onConnect(conn: Party.Connection) {
+        if (this.lobbyServer) {
+            this.lobbyServer.onConnect(conn);
+        } else if (this.gameServer) {
+            this.gameServer.onConnect(conn);
+        }
+    }
+
+    onMessage(message: string, sender: Party.Connection) {
+        if (this.lobbyServer) {
+            this.lobbyServer.onMessage(message, sender);
+        } else if (this.gameServer) {
+            this.gameServer.onMessage(message, sender);
+        }
+    }
+}
+```
+
+### Lobby Server (`party/lobby.ts`)
+
+```typescript:party/lobby.ts
+import type * as Party from "partykit/server";
+import type { Game } from "@/types/game";
+import { json } from "@/party/utils/response";
+
+export const SINGLETON_ROOM_ID = "lobby";
+const LOBBY_VERSION = "v1.0.13";
+const GAMES_PREFIX = "games/";
+
+// Store games in the lobby's storage
+const games = new Map<string, Game>();
+
+export default class LobbyServer implements Party.Server {
+    constructor(private room: Party.Room) {
+        console.log("[Lobby] Server initialized", {
+            version: LOBBY_VERSION,
+            roomId: room.id,
+        });
+    }
+
+    async onStart() {
+        console.log("[Lobby] Server starting", { version: LOBBY_VERSION });
+        await this.loadGames();
+        console.log("[Lobby] Server started", {
+            version: LOBBY_VERSION,
+            gamesLoaded: games.size,
+        });
+    }
+
+    private async loadGames() {
+        console.log("[Lobby] Loading games from storage", { version: LOBBY_VERSION });
+        try {
+            const gameKeys = await this.room.storage.list({ prefix: GAMES_PREFIX });
+            games.clear();
+            
+            for (const [key, value] of gameKeys) {
+                const gameId = key.replace(GAMES_PREFIX, "");
+                const game = value as Game;
+                games.set(gameId, game);
+            }
+
+            console.log("[Lobby] Games loaded", {
+                version: LOBBY_VERSION,
+                count: games.size,
+                games: Array.from(games.keys()),
+            });
+        } catch (error) {
+            console.error("[Lobby] Error loading games:", error);
+        }
+    }
+
+    async onRequest(req: Party.Request) {
+        console.log("[Lobby] Handling request", {
+            version: LOBBY_VERSION,
+            method: req.method,
+            url: req.url,
+        });
+
+        await this.loadGames();
+
+        if (req.method === "POST") {
+            const body = await req.json();
+            if (body.type === "updateGame" && body.game) {
+                const game = body.game as Game;
+                games.set(game.id, game);
+                await this.room.storage.put(`${GAMES_PREFIX}${game.id}`, game);
+                this.broadcastUpdate();
+                return json({ success: true });
+            }
+        }
+
+        return json({
+            type: "roomsUpdate",
+            rooms: Array.from(games.values()),
+        });
+    }
+
+    onConnect(conn: Party.Connection) {
+        console.log("[Lobby] New connection", {
+            version: LOBBY_VERSION,
+            connectionId: conn.id,
+        });
+
+        conn.send(
+            JSON.stringify({
+                type: "roomsUpdate",
+                rooms: Array.from(games.values()),
+            })
+        );
+    }
+
+    private broadcastUpdate() {
+        this.room.broadcast(
+            JSON.stringify({
+                type: "roomsUpdate",
+                rooms: Array.from(games.values()),
+            })
+        );
+    }
+
+    onMessage(message: string, sender: Party.Connection) {
+        console.log("[Lobby] Message received", {
+            version: LOBBY_VERSION,
+            message,
+            from: sender.id,
+        });
+    }
+}
+```
+
+## 5. Client Implementation
+
+### Connection Status Component (`app/components/ConnectionStatus.tsx`)
+
+```typescript:app/components/ConnectionStatus.tsx
+"use client";
+import { useEffect, useState } from "react";
+import PartySocket from "partysocket";
+
+const readyStates = {
+    [PartySocket.CONNECTING]: {
+        text: "Connecting",
+        className: "bg-yellow-500",
+    },
+    [PartySocket.OPEN]: {
+        text: "Connected",
+        className: "bg-green-500",
+    },
+    [PartySocket.CLOSING]: {
+        text: "Closing",
+        className: "bg-orange-500",
+    },
+    [PartySocket.CLOSED]: {
+        text: "Not Connected",
+        className: "bg-red-500",
+    },
+};
+
+export default function ConnectionStatus({ socket }: { socket: PartySocket | null }) {
+    const [readyState, setReadyState] = useState<number>(
+        socket?.readyState ?? PartySocket.CONNECTING
+    );
+    const display = readyStates[readyState as keyof typeof readyStates];
+
+    useEffect(() => {
+        if (socket) {
+            const onStateChange = () => setReadyState(socket.readyState);
+            socket.addEventListener("open", onStateChange);
+            socket.addEventListener("close", onStateChange);
+            return () => {
+                socket.removeEventListener("open", onStateChange);
+                socket.removeEventListener("close", onStateChange);
+            };
+        }
+    }, [socket]);
+
+    return (
+        <div className="z-20 fixed top-0 sm:top-2 left-0 w-full flex justify-center">
+            <div className="flex gap-2 justify-center items-center bg-stone-50 rounded-full shadow-md border border-stone-300 px-3 py-1 sm:py-2">
+                <p className="text-xs font-base uppercase tracking-wider leading-none text-stone-500">
+                    {display.text}
+                </p>
+                <div className={`w-3 h-3 rounded-full ${display.className}`} />
+            </div>
+        </div>
+    );
+}
+```
+
+### Room List Component (`app/RoomList.tsx`)
+
+```typescript:app/RoomList.tsx
+"use client";
+import { useState } from "react";
+import { Game } from "@/types/game";
+import { usePartySocket } from "partysocket/react";
+import { SINGLETON_ROOM_ID } from "@/party/lobby";
+import Link from "next/link";
+import { PARTYKIT_HOST } from "@/app/env";
+import ConnectionStatus from "@/app/components/ConnectionStatus";
+
+interface RoomListProps {
+    initialRooms: Game[];
+}
+
+export function RoomList({ initialRooms }: RoomListProps) {
+    const [rooms, setRooms] = useState<Game[]>(initialRooms);
+
+    const socket = usePartySocket({
+        host: PARTYKIT_HOST,
+        party: "lobby",
+        room: SINGLETON_ROOM_ID,
+        onMessage(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === "roomsUpdate") {
+                setRooms(data.rooms);
+            }
+        },
+    });
+
+    return (
+        <>
+            <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Create New Game Card */}
+                <li className="col-span-1">
+                    <div className="rounded-lg bg-white outline-1 outline-stone-200 shadow hover:shadow-md">
+                        <form action="/api/create-room" method="POST" className="p-6">
+                            <div className="flex flex-col gap-4">
+                                <h3 className="font-medium">Create New Game</h3>
+                                <input
+                                    type="text"
+                                    name="roomName"
+                                    placeholder="Game Name"
+                                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                                <button
+                                    type="submit"
+                                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    Create Game
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </li>
+
+                {/* Game List */}
+                {rooms.map((room) => (
+                    <li key={room.id} className="col-span-1">
+                        <div className="rounded-lg bg-white outline-1 outline-stone-200 shadow hover:shadow-md">
+                            <div className="p-6 space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="font-medium">
+                                            {room.name || "Unnamed Game"}
+                                        </h3>
+                                        <p className="text-sm text-stone-500">
+                                            {room.players.length} player
+                                            {room.players.length !== 1 && "s"}
+                                        </p>
+                                    </div>
+                                    <span className="bg-stone-100 text-stone-600 rounded-full px-2 py-1 text-sm">
+                                        {room.started ? "In Progress" : "Waiting"}
+                                    </span>
+                                </div>
+
+                                {room.players.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-medium text-stone-500">
+                                            Players
+                                        </h4>
+                                        <ul className="space-y-1">
+                                            {room.players.map((player) => (
+                                                <li key={player.id} className="text-sm">
+                                                    {player.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <Link
+                                    href={`/room/${room.id}`}
+                                    className="block w-full text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    {room.started ? "Spectate" : "Join Game"}
+                                </Link>
+                            </div>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+            <ConnectionStatus socket={socket} />
+        </>
+    );
+}
+```
+
+### Main Page (`app/page.tsx`)
+
+```typescript:app/page.tsx
+import { SINGLETON_ROOM_ID } from "@/party/lobby";
+import { PARTYKIT_URL } from "@/app/env";
+import { Game } from "@/types/game";
+import { RoomList } from "@/app/RoomList";
+
+export const revalidate = 0;
+
+export default async function GameListPage() {
+    const res = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
+        next: { revalidate: 0 },
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const rooms = data.rooms as Game[];
+
+    return (
+        <div className="min-h-screen bg-stone-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="space-y-8">
+                    <div>
+                        <h1 className="text-4xl font-medium text-stone-900">
+                            Boeren Bridge
+                        </h1>
+                        <p className="mt-2 text-lg text-stone-600">
+                            Join a game or create your own
+                        </p>
+                    </div>
+                    <RoomList initialRooms={rooms} />
+                </div>
+            </div>
+        </div>
+    );
+}
+```
+
+## 6. Deployment Configuration
+
+For Vercel deployment, create `vercel.json`:
+
+```json:vercel.json
+{
+    "rewrites": [
+        {
+            "source": "/party/:path*",
+            "destination": "https://${PARTYKIT_HOST}/party/:path*"
+        },
+        {
+            "source": "/parties/:party/:path*",
+            "destination": "https://${PARTYKIT_HOST}/parties/:party/:path*"
+        }
+    ]
+}
+```
+
+## Key Implementation Details
+
+1. **Singleton Room Pattern**: Uses a single lobby room for managing all games
+2. **WebSocket Routing**: 
+   - HTTP requests: `/party/:path*`
+   - WebSocket connections: `/parties/:party/:path*`
+3. **State Management**:
+   - Games stored in PartyKit storage with prefix
+   - In-memory Map for active games
+   - Broadcast updates to all connected clients
+4. **Connection Status**:
+   - Visual indicator for WebSocket connection state
+   - Automatic reconnection handling
+5. **Responsive Design**:
+   - Mobile-first layout
+   - Grid system for room cards
+   - Clean, consistent styling
+
+## Environment Variables
+
+Required environment variables:
+- `NEXT_PUBLIC_PARTYKIT_HOST`: Your PartyKit host (e.g., `your-app.username.partykit.dev`)
+- `NEXT_PUBLIC_PARTYKIT_PROTOCOL`: Protocol to use (`http` or `https`)
+
+## Development
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Start development servers:
+```bash
+npm run dev
+```
+
+This runs:
+- Next.js on port 3000
+- PartyKit on port 1999
+
+## Production
+
+1. Deploy PartyKit:
+```bash
+npx partykit deploy
+```
+
+2. Deploy Next.js to Vercel:
+```bash
+vercel
+```
+
+Remember to set environment variables in both PartyKit and Vercel dashboards. 

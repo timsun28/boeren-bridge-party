@@ -1,0 +1,365 @@
+# Implementing Game Room Listing with PartyKit
+
+This guide explains how to implement real-time game room listing functionality using PartyKit and Next.js.
+
+## Project Structure
+
+```
+├── app/
+│   ├── components/
+│   │   ├── GameList.tsx        # Real-time game list component
+│   │   └── GameRoom.tsx        # Individual game room component
+│   ├── types/
+│   │   └── game.ts            # Game and room type definitions
+│   ├── env.ts                 # Environment configuration
+│   └── page.tsx              # Main page with game listing
+├── party/
+│   ├── index.ts              # Main PartyKit server
+│   └── types.ts              # Shared types between client/server
+└── partykit.json            # PartyKit configuration
+```
+
+## 1. Type Definitions
+
+First, define the types for your game rooms:
+
+```typescript:app/types/game.ts
+export interface Player {
+    id: string;
+    name: string;
+}
+
+export interface Game {
+    id: string;
+    name: string;
+    players: Player[];
+    started: boolean;
+    createdAt: number;
+}
+
+export type GameUpdate = {
+    type: "gameUpdate";
+    games: Game[];
+};
+
+export type GameAction = 
+    | { type: "createGame"; name: string }
+    | { type: "joinGame"; gameId: string; player: Player }
+    | { type: "leaveGame"; gameId: string; playerId: string };
+```
+
+## 2. PartyKit Server Implementation
+
+Create the main server file:
+
+```typescript:party/index.ts
+import type * as Party from "partykit/server";
+import type { Game, GameAction, GameUpdate } from "../app/types/game";
+
+const LOBBY_ID = "lobby";
+const STORAGE_PREFIX = "games:";
+
+export default class GameServer implements Party.Server {
+    // Store games in memory for quick access
+    private games: Map<string, Game> = new Map();
+
+    constructor(readonly party: Party.Party) {}
+
+    async onStart() {
+        // Load existing games from storage
+        const keys = await this.party.storage.list({ prefix: STORAGE_PREFIX });
+        for (const [key, value] of keys) {
+            const gameId = key.replace(STORAGE_PREFIX, "");
+            this.games.set(gameId, value as Game);
+        }
+    }
+
+    async onRequest(req: Party.Request) {
+        // Handle HTTP requests
+        if (req.method === "GET") {
+            return new Response(
+                JSON.stringify({
+                    games: Array.from(this.games.values())
+                }),
+                {
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+        }
+
+        if (req.method === "POST") {
+            const action = await req.json() as GameAction;
+            await this.handleGameAction(action);
+            return new Response(JSON.stringify({ success: true }));
+        }
+
+        return new Response("Method not allowed", { status: 405 });
+    }
+
+    onConnect(conn: Party.Connection) {
+        // Send current games list to new connections
+        this.broadcastGames();
+    }
+
+    onMessage(message: string, sender: Party.Connection) {
+        const action = JSON.parse(message) as GameAction;
+        this.handleGameAction(action);
+    }
+
+    private async handleGameAction(action: GameAction) {
+        switch (action.type) {
+            case "createGame": {
+                const game: Game = {
+                    id: crypto.randomUUID(),
+                    name: action.name,
+                    players: [],
+                    started: false,
+                    createdAt: Date.now()
+                };
+                this.games.set(game.id, game);
+                await this.saveGame(game);
+                break;
+            }
+            case "joinGame": {
+                const game = this.games.get(action.gameId);
+                if (game && !game.started) {
+                    game.players.push(action.player);
+                    await this.saveGame(game);
+                }
+                break;
+            }
+            case "leaveGame": {
+                const game = this.games.get(action.gameId);
+                if (game) {
+                    game.players = game.players.filter(p => p.id !== action.playerId);
+                    await this.saveGame(game);
+                }
+                break;
+            }
+        }
+        this.broadcastGames();
+    }
+
+    private async saveGame(game: Game) {
+        await this.party.storage.put(`${STORAGE_PREFIX}${game.id}`, game);
+    }
+
+    private broadcastGames() {
+        const update: GameUpdate = {
+            type: "gameUpdate",
+            games: Array.from(this.games.values())
+        };
+        this.party.broadcast(JSON.stringify(update));
+    }
+}
+```
+
+## 3. Client Components
+
+Create the game list component:
+
+```typescript:app/components/GameList.tsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePartySocket } from "partysocket/react";
+import { PARTYKIT_HOST } from "@/app/env";
+import type { Game, GameUpdate } from "@/app/types/game";
+
+interface GameListProps {
+    initialGames: Game[];
+}
+
+export function GameList({ initialGames }: GameListProps) {
+    const [games, setGames] = useState<Game[]>(initialGames);
+
+    const socket = usePartySocket({
+        host: PARTYKIT_HOST,
+        room: "lobby",
+        onMessage(event) {
+            const data = JSON.parse(event.data) as GameUpdate;
+            if (data.type === "gameUpdate") {
+                setGames(data.games);
+            }
+        }
+    });
+
+    const createGame = async (name: string) => {
+        socket.send(JSON.stringify({ type: "createGame", name }));
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Create Game Card */}
+                <div className="p-4 border rounded-lg shadow">
+                    <h3 className="text-lg font-medium">Create New Game</h3>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const form = e.target as HTMLFormElement;
+                        const name = new FormData(form).get("name") as string;
+                        createGame(name);
+                        form.reset();
+                    }}>
+                        <input
+                            type="text"
+                            name="name"
+                            className="w-full px-3 py-2 border rounded"
+                            placeholder="Game Name"
+                            required
+                        />
+                        <button
+                            type="submit"
+                            className="mt-2 w-full px-4 py-2 bg-blue-500 text-white rounded"
+                        >
+                            Create Game
+                        </button>
+                    </form>
+                </div>
+
+                {/* Game List */}
+                {games.map((game) => (
+                    <div key={game.id} className="p-4 border rounded-lg shadow">
+                        <h3 className="text-lg font-medium">{game.name}</h3>
+                        <p className="text-sm text-gray-500">
+                            Players: {game.players.length}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                            Status: {game.started ? "In Progress" : "Waiting"}
+                        </p>
+                        <button
+                            onClick={() => {/* Handle join game */}}
+                            className="mt-2 w-full px-4 py-2 bg-green-500 text-white rounded"
+                            disabled={game.started}
+                        >
+                            {game.started ? "Game In Progress" : "Join Game"}
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+```
+
+## 4. Page Implementation
+
+Create the main page that fetches initial games:
+
+```typescript:app/page.tsx
+import { GameList } from "@/app/components/GameList";
+import { PARTYKIT_URL } from "@/app/env";
+import type { Game } from "@/app/types/game";
+
+export const revalidate = 0;
+
+export default async function HomePage() {
+    const res = await fetch(`${PARTYKIT_URL}/party/lobby`, {
+        next: { revalidate: 0 }
+    });
+
+    if (!res.ok) {
+        throw new Error("Failed to fetch games");
+    }
+
+    const data = await res.json();
+    const games = data.games as Game[];
+
+    return (
+        <main className="container mx-auto px-4 py-8">
+            <h1 className="text-3xl font-bold mb-8">Game Rooms</h1>
+            <GameList initialGames={games} />
+        </main>
+    );
+}
+```
+
+## 5. Environment Configuration
+
+Set up your environment variables:
+
+```typescript:app/env.ts
+export const PARTYKIT_HOST = 
+    process.env.NEXT_PUBLIC_PARTYKIT_HOST ?? "127.0.0.1:1999";
+
+export const PARTYKIT_URL = 
+    `${process.env.NEXT_PUBLIC_PARTYKIT_PROTOCOL ?? "http"}://${PARTYKIT_HOST}`;
+```
+
+## 6. PartyKit Configuration
+
+Configure PartyKit in `partykit.json`:
+
+```json:partykit.json
+{
+    "name": "game-rooms",
+    "main": "party/index.ts",
+    "parties": {
+        "lobby": "party/index.ts"
+    }
+}
+```
+
+## Key Implementation Details
+
+1. **Single Lobby Pattern**
+   - All game management happens in a single lobby room
+   - Uses consistent room ID ("lobby") for all connections
+
+2. **State Management**
+   - Server maintains in-memory game state
+   - Persistent storage with PartyKit storage API
+   - Broadcasts updates to all connected clients
+
+3. **Real-time Updates**
+   - WebSocket connections for immediate updates
+   - Initial state from HTTP request
+   - Proper error handling and loading states
+
+4. **Type Safety**
+   - Shared types between client and server
+   - Type-safe message handling
+   - Proper error boundaries
+
+## Common Issues to Check
+
+1. **Connection Issues**
+   - Verify PARTYKIT_HOST configuration
+   - Check WebSocket connection establishment
+   - Ensure proper error handling
+
+2. **State Synchronization**
+   - Verify initial state loading
+   - Check broadcast handling
+   - Ensure storage persistence
+
+3. **Type Errors**
+   - Verify shared type definitions
+   - Check message type handling
+   - Ensure proper type imports
+
+## Development
+
+1. Install dependencies:
+```bash
+npm install partysocket
+```
+
+2. Run development servers:
+```bash
+npx partykit dev
+npm run dev
+```
+
+## Production Deployment
+
+1. Deploy PartyKit:
+```bash
+npx partykit deploy
+```
+
+2. Set environment variables in production:
+- `NEXT_PUBLIC_PARTYKIT_HOST`
+- `NEXT_PUBLIC_PARTYKIT_PROTOCOL`
+
+Remember to handle error cases and add proper loading states in your components for a better user experience. 
