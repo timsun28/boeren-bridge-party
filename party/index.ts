@@ -90,6 +90,16 @@ export default class GameServer implements Party.Server {
 
                     // Save game and update in-memory state
                     await this.room.storage.put(gameId, game);
+                    try {
+                        const gameRoom = this.room.context.parties.main.get(gameId);
+                        await gameRoom.storage.put(gameId, game);
+                        console.log("[Lobby] Seeded game room storage:", { gameId });
+                    } catch (error) {
+                        console.error("[Lobby] Failed to seed game room storage:", {
+                            gameId,
+                            error,
+                        });
+                    }
                     games.set(gameId, game);
 
                     // Broadcast update to all lobby connections
