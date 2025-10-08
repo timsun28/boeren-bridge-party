@@ -35,24 +35,36 @@ export function RoomList({ initialRooms }: RoomListProps) {
         room: SINGLETON_ROOM_ID,
         onMessage(event) {
             const data = JSON.parse(event.data);
+            console.log("[Lobby] Message received", { type: data.type, payload: data });
             if (data.type === "roomsUpdate") {
                 setRooms(data.rooms);
             }
         },
         onOpen() {
+            console.log("[Lobby] Socket open", {
+                room: SINGLETON_ROOM_ID,
+                url: `${PARTYKIT_HOST}/parties/main/${SINGLETON_ROOM_ID}`,
+            });
             setIsLoading(false);
         },
         onClose() {
+            console.warn("[Lobby] Socket closed", { room: SINGLETON_ROOM_ID });
             setIsLoading(true);
         },
     });
 
     const handleJoinRoom = (room: Game) => {
+        console.log("[Lobby] Join dialog opened", { roomId: room.id, roomName: room.name });
         setSelectedRoom(room);
     };
 
     const handleConfirmJoin = () => {
         if (selectedRoom && playerName.trim()) {
+            console.log("[Lobby] Confirm join", {
+                roomId: selectedRoom.id,
+                roomName: selectedRoom.name,
+                playerName: playerName.trim(),
+            });
             router.push(`/room/${selectedRoom.id}?player=${encodeURIComponent(playerName)}`);
         }
     };

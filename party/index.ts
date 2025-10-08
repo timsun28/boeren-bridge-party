@@ -39,7 +39,17 @@ export default class GameServer implements Party.Server {
         } else {
             // For game rooms, load specific game
             this.game = await this.room.storage.get<Game>(this.room.id);
-            console.log("[Game] Loaded:", this.game);
+            if (this.game) {
+                console.log("[Game] Loaded:", {
+                    gameId: this.game.id,
+                    roomId: this.room.id,
+                    players: this.game.players?.length ?? 0,
+                });
+            } else {
+                console.warn("[Game] No game found in storage during onStart:", {
+                    roomId: this.room.id,
+                });
+            }
         }
     }
 
@@ -151,6 +161,11 @@ export default class GameServer implements Party.Server {
                 connectionId: conn.id,
             });
             conn.send(JSON.stringify({ type: "gameState", game: this.game }));
+        } else {
+            console.warn("[Game] Connection established but game not loaded:", {
+                roomId: this.room.id,
+                connectionId: conn.id,
+            });
         }
     }
 
@@ -161,9 +176,33 @@ export default class GameServer implements Party.Server {
             roomId: this.room.id,
         });
 
-        if (!this.game) return;
+        if (!this.game) {
+            console.warn("[Game] Ignoring message because game not loaded:", {
+                roomId: this.room.id,
+                senderId: sender.id,
+            });
+            return;
+        }
 
-        const data = JSON.parse(message);
+        let data: { type: string; [key: string]: unknown };
+        try {
+            data = JSON.parse(message);
+        } catch (error) {
+            console.error("[Server] Failed to parse incoming message:", {
+                error,
+                rawMessage: message,
+                roomId: this.room.id,
+                senderId: sender.id,
+            });
+            sender.send(
+                JSON.stringify({
+                    type: "error",
+                    message: "Invalid message format",
+                })
+            );
+            return;
+        }
+
         console.log("[Server] Message:", { type: data.type, sender: sender.id });
 
         if (this.room.id !== SINGLETON_ROOM_ID && this.game) {
@@ -194,6 +233,13 @@ export default class GameServer implements Party.Server {
                         });
                     }
                     break;
+                }
+                default: {
+                    console.log("[Game] Received unsupported message type:", {
+                        type: data.type,
+                        roomId: this.room.id,
+                        senderId: sender.id,
+                    });
                 }
             }
         }

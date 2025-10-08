@@ -15,9 +15,15 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
     const [predictedTricks, setPredictedTricks] = useState<number | null>(null);
     const [tempActualTricks, setTempActualTricks] = useState<number | null>(null);
-    console.log({ game, roomId, playerName, initialGame });
+    console.log("[RoomClient] Render", {
+        roomId,
+        playerName,
+        initialPlayers: initialGame?.players?.length ?? 0,
+        currentPlayers: game?.players?.length ?? 0,
+    });
     useEffect(() => {
         if (!playerName) {
+            console.warn("[RoomClient] Player name missing on mount, redirecting", { roomId });
             window.location.href = "/";
         }
     }, [playerName]);
@@ -27,6 +33,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
         party: "main",
         room: roomId,
         onOpen() {
+            console.log("[RoomClient] Socket open", { roomId, playerName, url: `${PARTYKIT_HOST}/parties/main/${roomId}` });
             if (playerName) {
                 socket.send(
                     JSON.stringify({
@@ -34,15 +41,23 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                         playerName,
                     })
                 );
+                console.log("[RoomClient] Sent joinGame message", { roomId, playerName });
             }
         },
         onMessage(event) {
             const data = JSON.parse(event.data);
+            console.log("[RoomClient] Message received", { roomId, type: data.type, payload: data });
             if (data.type === "gameState") {
                 setGame(data.game);
                 const player = data.game.players.find((p: Player) => p.name === playerName);
                 if (player) {
                     setCurrentPlayer(player);
+                } else {
+                    console.warn("[RoomClient] Current player not found in updated game", {
+                        roomId,
+                        playerName,
+                        players: data.game.players?.map((p: Player) => p.name) ?? [],
+                    });
                 }
             } else if (data.type === "error") {
                 console.error("Game error:", data.message);
@@ -50,12 +65,24 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
             }
         },
         onClose() {
-            console.log("Connection closed, attempting to reconnect...");
+            console.warn("[RoomClient] Connection closed", { roomId });
         },
         onError(error) {
-            console.error("WebSocket error:", error);
+            console.error("[RoomClient] WebSocket error", { roomId, error });
         },
     });
+
+    useEffect(() => {
+        if (!game) {
+            return;
+        }
+        console.log("[RoomClient] Game state updated", {
+            roomId,
+            playerCount: game.players?.length ?? 0,
+            status: game.status,
+            currentRound: game.currentRound,
+        });
+    }, [game, roomId]);
 
     const handlePredictTricks = (tricks: number) => {
         if (!currentPlayer) return;
