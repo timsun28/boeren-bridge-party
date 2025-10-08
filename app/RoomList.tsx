@@ -5,8 +5,6 @@ import { SINGLETON_ROOM_ID } from "@/party";
 import { PARTYKIT_HOST } from "@/app/env";
 import type { Game } from "@/types/game";
 import ConnectionStatus from "./components/ConnectionStatus";
-import Link from "next/link";
-import PartySocket from "partysocket";
 import { createRoom } from "@/app/actions";
 import {
     AlertDialog,
@@ -87,6 +85,15 @@ export function RoomList({ initialRooms }: RoomListProps) {
                                     type="text"
                                     name="roomName"
                                     placeholder="Game Name"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg 
+                                             text-gray-200 placeholder-gray-400
+                                             focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                                <input
+                                    type="text"
+                                    name="playerName"
+                                    placeholder="Your Name"
                                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg 
                                              text-gray-200 placeholder-gray-400
                                              focus:outline-none focus:ring-2 focus:ring-blue-500"

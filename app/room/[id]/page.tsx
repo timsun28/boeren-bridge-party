@@ -8,7 +8,7 @@ async function getGame(id: string) {
         next: { revalidate: 0 },
     });
 
-    if (response.status !== 200) {
+    if (!response.ok) {
         redirect("/");
     }
 
@@ -23,7 +23,10 @@ export default async function Room({
     params: { id: string };
     searchParams: { player?: string };
 }) {
-    if (!playerName) {
+    const decodedPlayerName = playerName ? decodeURIComponent(playerName) : "";
+    const trimmedPlayerName = decodedPlayerName.trim();
+
+    if (!trimmedPlayerName) {
         redirect("/");
     }
 
@@ -32,5 +35,5 @@ export default async function Room({
         redirect("/");
     }
 
-    return <RoomClient roomId={id} initialGame={game} playerName={decodeURIComponent(playerName)} />;
+    return <RoomClient roomId={id} initialGame={game} playerName={trimmedPlayerName} />;
 }

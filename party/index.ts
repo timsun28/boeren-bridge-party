@@ -57,7 +57,12 @@ export default class GameServer implements Party.Server {
                 return new Response(
                     JSON.stringify({
                         rooms: Array.from(games.values()),
-                    })
+                    }),
+                    {
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    }
                 );
             }
 
@@ -90,14 +95,27 @@ export default class GameServer implements Party.Server {
                     // Broadcast update to all lobby connections
                     this.broadcastGameList();
 
-                    return new Response(JSON.stringify(game));
+                    return new Response(JSON.stringify(game), {
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    });
                 }
             }
         }
 
         // Game room requests
         if (this.game) {
-            return new Response(JSON.stringify(this.game));
+            return new Response(
+                JSON.stringify({
+                    game: this.game,
+                }),
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
         }
 
         console.log("[Game] Game not found:", this.room.id);
