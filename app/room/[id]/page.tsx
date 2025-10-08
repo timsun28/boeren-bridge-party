@@ -16,17 +16,17 @@ async function getGame(id: string) {
     return data.game; // Server returns { game: Game }
 }
 
-type AwaitableParams = Promise<{ id: string }> | { id: string };
-type AwaitableSearchParams = Promise<{ player?: string } | undefined> | { player?: string } | undefined;
-
 export default async function Room({
     params,
     searchParams,
 }: {
-    params: AwaitableParams;
-    searchParams: AwaitableSearchParams;
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ player?: string } | undefined>;
 }) {
     const { id } = await params;
+    if (!id) {
+        redirect("/");
+    }
     const resolvedSearchParams = (await searchParams) ?? {};
     const playerName = resolvedSearchParams.player;
 
