@@ -16,13 +16,20 @@ async function getGame(id: string) {
     return data.game; // Server returns { game: Game }
 }
 
+type AwaitableParams = Promise<{ id: string }> | { id: string };
+type AwaitableSearchParams = Promise<{ player?: string } | undefined> | { player?: string } | undefined;
+
 export default async function Room({
-    params: { id },
-    searchParams: { player: playerName },
+    params,
+    searchParams,
 }: {
-    params: { id: string };
-    searchParams: { player?: string };
+    params: AwaitableParams;
+    searchParams: AwaitableSearchParams;
 }) {
+    const { id } = await params;
+    const resolvedSearchParams = (await searchParams) ?? {};
+    const playerName = resolvedSearchParams.player;
+
     const decodedPlayerName = playerName ? decodeURIComponent(playerName) : "";
     const trimmedPlayerName = decodedPlayerName.trim();
 
