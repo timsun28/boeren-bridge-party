@@ -38,18 +38,7 @@ export default class GameServer implements Party.Server {
             });
         } else {
             // For game rooms, load specific game
-            this.game = await this.room.storage.get<Game>(this.room.id);
-            if (this.game) {
-                console.log("[Game] Loaded:", {
-                    gameId: this.game.id,
-                    roomId: this.room.id,
-                    players: this.game.players?.length ?? 0,
-                });
-            } else {
-                console.warn("[Game] No game found in storage during onStart:", {
-                    roomId: this.room.id,
-                });
-            }
+            await this.loadGameFromStorage("onStart");
         }
     }
 
@@ -61,6 +50,10 @@ export default class GameServer implements Party.Server {
             roomId: this.room.id,
             isLobby: this.room.id === SINGLETON_ROOM_ID,
         });
+
+        if (this.room.id !== SINGLETON_ROOM_ID) {
+            await this.loadGameFromStorage("onRequest");
+        }
 
         if (this.room.id === SINGLETON_ROOM_ID) {
             if (req.method === "GET") {
@@ -142,12 +135,16 @@ export default class GameServer implements Party.Server {
         return new Response("Not found", { status: 404 });
     }
 
-    onConnect(conn: Party.Connection) {
+    async onConnect(conn: Party.Connection) {
         console.log("[Server] onConnect:", {
             connectionId: conn.id,
             roomId: this.room.id,
             isLobby: this.room.id === SINGLETON_ROOM_ID,
         });
+
+        if (this.room.id !== SINGLETON_ROOM_ID) {
+            await this.loadGameFromStorage("onConnect");
+        }
 
         if (this.room.id === SINGLETON_ROOM_ID) {
             console.log("[Lobby] Broadcasting game list to new connection");
@@ -175,6 +172,10 @@ export default class GameServer implements Party.Server {
             senderId: sender.id,
             roomId: this.room.id,
         });
+
+        if (this.room.id !== SINGLETON_ROOM_ID) {
+            await this.loadGameFromStorage("onMessage");
+        }
 
         if (!this.game) {
             console.warn("[Game] Ignoring message because game not loaded:", {
@@ -242,6 +243,44 @@ export default class GameServer implements Party.Server {
                     });
                 }
             }
+        }
+    }
+
+    private async loadGameFromStorage(context: string) {
+        if (this.game) {
+            return;
+        }
+
+        try {
+            const storedGame = await this.storage.get<Game>(this.room.id);
+            if (storedGame) {
+                this.game = storedGame;
+                console.log("[Game] Loaded from storage:", {
+                    context,
+                    roomId: this.room.id,
+                    players: storedGame.players?.length ?? 0,
+                });
+                return;
+            }
+
+            console.warn("[Game] Storage returned nothing:", {
+                context,
+                roomId: this.room.id,
+            });
+
+            if (games.has(this.room.id)) {
+                this.game = games.get(this.room.id);
+                console.log("[Game] Fallback to in-memory cache:", {
+                    context,
+                    roomId: this.room.id,
+                });
+            }
+        } catch (error) {
+            console.error("[Game] Failed to load from storage:", {
+                context,
+                roomId: this.room.id,
+                error,
+            });
         }
     }
 
