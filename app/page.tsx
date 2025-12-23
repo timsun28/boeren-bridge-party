@@ -11,12 +11,19 @@ export default async function GameListPage() {
         next: { revalidate: 0 },
     });
 
-    if (!res.ok) {
-        throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
-    }
+    let rooms: Game[] = [];
+    let errorMessage: string | null = null;
 
-    const data = await res.json();
-    const rooms = data.rooms as Game[];
+    if (!res.ok) {
+        errorMessage = `Lobby unavailable (${res.status} ${res.statusText}).`;
+    } else {
+        try {
+            const data = (await res.json()) as { rooms?: Game[] } | undefined;
+            rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+        } catch {
+            errorMessage = "Lobby data unavailable. Please try again.";
+        }
+    }
 
     return (
         <ErrorBoundary>
@@ -27,6 +34,11 @@ export default async function GameListPage() {
                             <h1 className="text-4xl font-medium text-gray-100">Boeren Bridge</h1>
                             <p className="mt-2 text-lg text-gray-400">Join a game or create your own</p>
                         </div>
+                        {errorMessage ? (
+                            <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-amber-200">
+                                {errorMessage}
+                            </div>
+                        ) : null}
                         <RoomList initialRooms={rooms} />
                     </div>
                 </div>
