@@ -18,6 +18,20 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
     const [predictedTricks, setPredictedTricks] = useState<number | null>(initialPlayer?.predictedTricks ?? null);
     const [tempActualTricks, setTempActualTricks] = useState<number | null>(initialPlayer?.actualTricks ?? null);
+    const [joinError, setJoinError] = useState<string | null>(null);
+    const [playerId] = useState(() => {
+        if (typeof window === "undefined") {
+            return "";
+        }
+        const key = `boeren-bridge-player-${roomId}-${playerName}`;
+        const existing = window.localStorage.getItem(key);
+        if (existing) {
+            return existing;
+        }
+        const nextId = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        window.localStorage.setItem(key, nextId);
+        return nextId;
+    });
     console.log("[RoomClient] Render", {
         roomId,
         playerName,
@@ -46,6 +60,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                     JSON.stringify({
                         type: "joinGame",
                         playerName,
+                        playerId,
                     })
                 );
                 console.log("[RoomClient] Sent joinGame message", { roomId, playerName });
@@ -55,8 +70,11 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
             const data = JSON.parse(event.data);
             console.log("[RoomClient] Message received", { roomId, type: data.type, payload: data });
             if (data.type === "gameState") {
+                setJoinError(null);
                 setGame(data.game);
-                const player = data.game.players.find((p: Player) => p.name === playerName);
+                const player =
+                    data.game.players.find((p: Player) => p.id === playerId) ??
+                    data.game.players.find((p: Player) => p.name === playerName);
                 if (player) {
                     setCurrentPlayer(player);
                     setPredictedTricks(player.tempPrediction ?? player.predictedTricks ?? null);
@@ -70,7 +88,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                 }
             } else if (data.type === "error") {
                 console.error("Game error:", data.message);
-                router.replace("/");
+                setJoinError(typeof data.message === "string" ? data.message : "Unable to join this room.");
             }
         },
         onClose() {
@@ -282,6 +300,23 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
         if (roundIndex === totalRoundsPerPhase) return "Middle (No Trump)";
         return "Descending";
     };
+
+    if (joinError) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-linear-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+                <div className="w-full max-w-lg rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+                    <h1 className="text-2xl font-semibold mb-2 text-red-100">Unable to join</h1>
+                    <p className="text-sm text-red-100/80">{joinError}</p>
+                    <button
+                        onClick={() => router.replace("/")}
+                        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                        Back to lobby
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (!game?.started && !hasEnoughPlayers) {
         return (

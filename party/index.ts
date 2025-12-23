@@ -210,7 +210,7 @@ export default class GameServer implements Party.Server {
 
         switch (data.type) {
             case "joinGame":
-                await this.handleJoinGame(sender, data.playerName);
+                await this.handleJoinGame(sender, data.playerName, data.playerId);
                 break;
             case "leaveGame":
                 await this.handleLeaveGame(data.playerId);
@@ -274,7 +274,7 @@ export default class GameServer implements Party.Server {
         }
     }
 
-    private async handleJoinGame(sender: Party.Connection, playerName: unknown) {
+    private async handleJoinGame(sender: Party.Connection, playerName: unknown, playerId: unknown) {
         if (!this.game) {
             return;
         }
@@ -290,18 +290,31 @@ export default class GameServer implements Party.Server {
             return;
         }
 
-        const existingPlayer = this.game.players.find((player) => player.id === sender.id);
+        const resolvedPlayerId = typeof playerId === "string" && playerId.trim() ? playerId.trim() : sender.id;
+        const existingPlayer = this.game.players.find((player) => player.id === resolvedPlayerId);
         if (existingPlayer) {
             existingPlayer.name = trimmedName;
-            console.log("[Game] Player rejoined", { playerId: sender.id, roomId: this.room.id });
+            console.log("[Game] Player rejoined", { playerId: resolvedPlayerId, roomId: this.room.id });
         } else {
+            const nameTaken = this.game.players.find(
+                (player) => player.name.toLowerCase() === trimmedName.toLowerCase()
+            );
+            if (nameTaken) {
+                sender.send(
+                    JSON.stringify({
+                        type: "error",
+                        message: "That name is already taken in this room.",
+                    })
+                );
+                return;
+            }
             this.game.players.push({
-                id: sender.id,
+                id: resolvedPlayerId,
                 name: trimmedName,
                 score: 0,
                 joinedAt: Date.now(),
             });
-            console.log("[Game] Player added", { playerId: sender.id, roomId: this.room.id });
+            console.log("[Game] Player added", { playerId: resolvedPlayerId, roomId: this.room.id });
         }
 
         recalcScoresFromRounds(this.game);
