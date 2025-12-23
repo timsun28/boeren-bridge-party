@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { usePartySocket } from "partysocket/react";
 import { SINGLETON_ROOM_ID } from "@/party/constants";
-import { PARTYKIT_HOST } from "@/app/env";
+import { PARTYKIT_HOST, PARTYKIT_URL } from "@/app/env";
 import type { Game } from "@/types/game";
 import ConnectionStatus from "./components/ConnectionStatus";
 import { createRoom } from "@/app/actions";
@@ -26,6 +26,8 @@ export function RoomList({ initialRooms }: RoomListProps) {
     const [rooms, setRooms] = useState<Game[]>(initialRooms);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState<Game | null>(null);
+    const [roomToDelete, setRoomToDelete] = useState<Game | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [playerName, setPlayerName] = useState("");
     const router = useRouter();
 
@@ -66,6 +68,26 @@ export function RoomList({ initialRooms }: RoomListProps) {
                 playerName: playerName.trim(),
             });
             router.push(`/room/${selectedRoom.id}?player=${encodeURIComponent(playerName)}`);
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!roomToDelete) return;
+        setIsDeleting(true);
+        try {
+            const response = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "deleteGame", gameId: roomToDelete.id }),
+            });
+            if (!response.ok) {
+                throw new Error("Failed to delete room");
+            }
+            setRoomToDelete(null);
+        } catch (error) {
+            console.error("[Lobby] Failed to delete room", { error, roomId: roomToDelete.id });
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -168,6 +190,13 @@ export function RoomList({ initialRooms }: RoomListProps) {
                                 >
                                     {room.started ? "Spectate" : "Join Game"}
                                 </button>
+                                <button
+                                    onClick={() => setRoomToDelete(room)}
+                                    className="block w-full text-center px-4 py-2 bg-red-600/80 text-gray-100 
+                                             rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    Remove Room
+                                </button>
                             </div>
                         </div>
                     </li>
@@ -203,6 +232,29 @@ export function RoomList({ initialRooms }: RoomListProps) {
                             disabled={!playerName.trim()}
                         >
                             Join Game
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!roomToDelete} onOpenChange={() => setRoomToDelete(null)}>
+                <AlertDialogContent className="bg-gray-800 border-gray-700">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-gray-100">Remove room</AlertDialogTitle>
+                        <AlertDialogDescription className="text-gray-400">
+                            This will permanently remove "{roomToDelete?.name || "this room"}" and its game state.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600">
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDelete}
+                            className="bg-red-600 text-gray-100 hover:bg-red-700"
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? "Removing..." : "Remove"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
