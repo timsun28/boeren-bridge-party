@@ -7,22 +7,22 @@ import { ErrorBoundary } from "@/app/components/ErrorBoundary";
 export const revalidate = 0;
 
 export default async function GameListPage() {
-    const res = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
-        next: { revalidate: 0 },
-    });
-
     let rooms: Game[] = [];
     let errorMessage: string | null = null;
 
-    if (!res.ok) {
-        errorMessage = `Lobby unavailable (${res.status} ${res.statusText}).`;
-    } else {
-        try {
+    try {
+        const res = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
+            next: { revalidate: 0 },
+        });
+
+        if (!res.ok) {
+            errorMessage = `Lobby unavailable (${res.status} ${res.statusText}).`;
+        } else {
             const data = (await res.json()) as { rooms?: Game[] } | undefined;
             rooms = Array.isArray(data?.rooms) ? data.rooms : [];
-        } catch {
-            errorMessage = "Lobby data unavailable. Please try again.";
         }
+    } catch {
+        errorMessage = "Lobby unavailable. Please check the PartyKit host.";
     }
 
     return (
