@@ -59,7 +59,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                 const player = data.game.players.find((p: Player) => p.name === playerName);
                 if (player) {
                     setCurrentPlayer(player);
-                    setPredictedTricks(player.predictedTricks ?? null);
+                    setPredictedTricks(player.tempPrediction ?? player.predictedTricks ?? null);
                     setTempActualTricks(player.actualTricks ?? null);
                 } else {
                     console.warn("[RoomClient] Current player not found in updated game", {
