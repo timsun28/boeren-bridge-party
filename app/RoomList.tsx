@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { usePartySocket } from "partysocket/react";
-import { SINGLETON_ROOM_ID } from "@/party";
+import { SINGLETON_ROOM_ID } from "@/party/constants";
 import { PARTYKIT_HOST } from "@/app/env";
 import type { Game } from "@/types/game";
 import ConnectionStatus from "./components/ConnectionStatus";

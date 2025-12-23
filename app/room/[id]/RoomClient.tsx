@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import type { Game, Player } from "@/types/game";
-import usePartySocket from "partysocket/react";
+import { usePartySocket } from "partysocket/react";
 import { PARTYKIT_HOST } from "@/app/env";
+import { useRouter } from "next/navigation";
 
 interface RoomClientProps {
     roomId: string;
@@ -11,10 +12,12 @@ interface RoomClientProps {
 }
 
 export default function RoomClient({ roomId, initialGame, playerName }: RoomClientProps) {
+    const router = useRouter();
+    const initialPlayer = initialGame?.players.find((player) => player.name === playerName) ?? null;
     const [game, setGame] = useState<Game | null>(initialGame);
     const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
-    const [predictedTricks, setPredictedTricks] = useState<number | null>(null);
-    const [tempActualTricks, setTempActualTricks] = useState<number | null>(null);
+    const [predictedTricks, setPredictedTricks] = useState<number | null>(initialPlayer?.predictedTricks ?? null);
+    const [tempActualTricks, setTempActualTricks] = useState<number | null>(initialPlayer?.actualTricks ?? null);
     console.log("[RoomClient] Render", {
         roomId,
         playerName,
@@ -24,16 +27,20 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     useEffect(() => {
         if (!playerName) {
             console.warn("[RoomClient] Player name missing on mount, redirecting", { roomId });
-            window.location.href = "/";
+            router.replace("/");
         }
-    }, [playerName]);
+    }, [playerName, roomId, router]);
 
     const socket = usePartySocket({
         host: PARTYKIT_HOST,
         party: "main",
         room: roomId,
         onOpen() {
-            console.log("[RoomClient] Socket open", { roomId, playerName, url: `${PARTYKIT_HOST}/parties/main/${roomId}` });
+            console.log("[RoomClient] Socket open", {
+                roomId,
+                playerName,
+                url: `${PARTYKIT_HOST}/parties/main/${roomId}`,
+            });
             if (playerName) {
                 socket.send(
                     JSON.stringify({
@@ -52,6 +59,8 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                 const player = data.game.players.find((p: Player) => p.name === playerName);
                 if (player) {
                     setCurrentPlayer(player);
+                    setPredictedTricks(player.predictedTricks ?? null);
+                    setTempActualTricks(player.actualTricks ?? null);
                 } else {
                     console.warn("[RoomClient] Current player not found in updated game", {
                         roomId,
@@ -61,7 +70,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                 }
             } else if (data.type === "error") {
                 console.error("Game error:", data.message);
-                window.location.href = "/";
+                router.replace("/");
             }
         },
         onClose() {
@@ -97,7 +106,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     };
 
     const handleActualTricks = (tricks: number) => {
-        if (!currentPlayer || predictedTricks === undefined) return;
+        if (!currentPlayer || predictedTricks == null) return;
         setTempActualTricks(tricks);
     };
 
@@ -135,11 +144,11 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                 playerId: currentPlayer.id,
             })
         );
-        window.location.href = "/";
+        router.replace("/");
     };
 
     const handleConfirmPrediction = () => {
-        if (!currentPlayer || predictedTricks === undefined) return;
+        if (!currentPlayer || predictedTricks == null) return;
         socket.send(
             JSON.stringify({
                 type: "confirmPrediction",
@@ -150,7 +159,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     };
 
     const handleConfirmActual = () => {
-        if (!currentPlayer || tempActualTricks === undefined) return;
+        if (!currentPlayer || tempActualTricks == null || predictedTricks == null) return;
         socket.send(
             JSON.stringify({
                 type: "submitTricks",
@@ -166,8 +175,10 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
         disabled: boolean = false,
         showTotalTricks: boolean = true
     ) => {
-        const isLastPredictor = game?.players.filter((p) => p.predictedTricks === undefined).length === 1;
-        const predictedSum = game?.players.reduce((sum, p) => sum + (p.predictedTricks || 0), 0) || 0;
+        const isLastPredictor =
+            game?.players.filter((p) => p.predictedTricks === undefined && p.tempPrediction === undefined).length === 1;
+        const predictedSum =
+            game?.players.reduce((sum, p) => sum + (p.tempPrediction ?? p.predictedTricks ?? 0), 0) || 0;
 
         return (
             <div>
@@ -196,7 +207,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                                             ? "bg-gray-400 cursor-not-allowed"
                                             : `
                                                 bg-blue-600 hover:bg-blue-700
-                                                active:top-[0.25rem] active:shadow-[0_0px_0_0_#1e40af]
+                                                active:top-1 active:shadow-[0_0px_0_0_#1e40af]
                                                 shadow-[0_4px_0_0_#1e40af]
                                                 hover:shadow-[0_4px_0_0_#1e40af]
                                             `
@@ -251,13 +262,13 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
         );
     };
 
-    const canPredict = game?.status === "predicting" && !currentPlayer?.predictedTricks;
+    const canPredict = game?.status === "predicting" && currentPlayer?.predictedTricks === undefined;
     const canSubmitActual = game?.status === "playing" && currentPlayer?.predictedTricks !== undefined;
     const needsConfirmation =
         game?.status === "confirming" && !game.roundConfirmations[game.currentRound]?.includes(currentPlayer?.id || "");
 
     const MIN_PLAYERS = 2; // Minimum players needed to start
-    const hasEnoughPlayers = game?.players.length && game?.players.length >= MIN_PLAYERS;
+    const hasEnoughPlayers = (game?.players.length ?? 0) >= MIN_PLAYERS;
 
     // Add this helper function to check if a player has confirmed
     const hasPlayerConfirmed = (playerId: string) => {
@@ -274,7 +285,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
 
     if (!game?.started && !hasEnoughPlayers) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+            <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-linear-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
                 <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">{game?.name || "Loading..."}</h1>
 
                 <div className="w-full max-w-2xl mb-8">
@@ -317,7 +328,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
     }
 
     return (
-        <div className="min-h-screen flex flex-col items-center p-8 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="min-h-screen flex flex-col items-center p-8 bg-linear-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
             <div className="w-full max-w-2xl flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
                     {game?.name || "Loading..."} - Round {game?.currentRound}
@@ -361,8 +372,10 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
                                 Score: {player.score}
-                                {player.predictedTricks !== undefined && (
-                                    <span className="ml-2">(Predicted: {player.predictedTricks})</span>
+                                {(player.predictedTricks ?? player.tempPrediction) !== undefined && (
+                                    <span className="ml-2">
+                                        (Predicted: {player.predictedTricks ?? player.tempPrediction})
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -377,7 +390,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
                             {canPredict ? "Predict your tricks" : "Predictions locked"}
                         </h2>
                         {renderTrickButtons(handlePredictTricks, !canPredict, true)}
-                        {predictedTricks !== undefined && !currentPlayer?.predictedTricks && (
+                        {predictedTricks != null && currentPlayer?.predictedTricks === undefined && (
                             <button
                                 onClick={handleConfirmPrediction}
                                 className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"

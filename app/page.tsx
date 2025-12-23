@@ -1,4 +1,4 @@
-import { SINGLETON_ROOM_ID } from "@/party";
+import { SINGLETON_ROOM_ID } from "@/party/constants";
 import { PARTYKIT_URL } from "@/app/env";
 import { Game } from "@/types/game";
 import { RoomList } from "@/app/RoomList";

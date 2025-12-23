@@ -40,12 +40,15 @@ async function getGame(id: string) {
     }
 }
 
+type RoomParams = { id: string };
+type RoomSearchParams = { player?: string | string[] };
+
 export default async function Room({
     params,
     searchParams,
 }: {
-    params: Promise<{ id: string }>;
-    searchParams: Promise<{ player?: string } | undefined>;
+    params: Promise<RoomParams>;
+    searchParams?: Promise<RoomSearchParams>;
 }) {
     const { id } = await params;
     if (!id) {
@@ -53,7 +56,10 @@ export default async function Room({
         redirect("/");
     }
     const resolvedSearchParams = (await searchParams) ?? {};
-    const playerName = resolvedSearchParams.player;
+    const playerParam = Array.isArray(resolvedSearchParams.player)
+        ? resolvedSearchParams.player[0]
+        : resolvedSearchParams.player;
+    const playerName = playerParam;
 
     const decodedPlayerName = playerName ? decodeURIComponent(playerName) : "";
     const trimmedPlayerName = decodedPlayerName.trim();
