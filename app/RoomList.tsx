@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { usePartySocket } from "partysocket/react";
 import { SINGLETON_ROOM_ID } from "@/party/constants";
-import { PARTYKIT_HOST, PARTYKIT_URL } from "@/app/env";
+import { PARTYKIT_HOST } from "@/app/env";
 import type { Game } from "@/types/game";
 import ConnectionStatus from "./components/ConnectionStatus";
 import { createRoom } from "@/app/actions";
@@ -75,10 +75,10 @@ export function RoomList({ initialRooms }: RoomListProps) {
         if (!roomToDelete) return;
         setIsDeleting(true);
         try {
-            const response = await fetch(`${PARTYKIT_URL}/party/${SINGLETON_ROOM_ID}`, {
+            const response = await fetch("/api/lobby/delete", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "deleteGame", gameId: roomToDelete.id }),
+                body: JSON.stringify({ gameId: roomToDelete.id }),
             });
             if (!response.ok) {
                 throw new Error("Failed to delete room");
