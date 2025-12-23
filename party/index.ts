@@ -513,7 +513,7 @@ export default class GameServer implements Party.Server {
             return;
         }
 
-        const round = this.game.rounds.find((entry) => entry.roundNumber === this.game.currentRound);
+        const round = this.game.rounds.find((entry) => entry.roundNumber === (this.game?.currentRound ?? 0));
         if (round) {
             round.completed = true;
         }

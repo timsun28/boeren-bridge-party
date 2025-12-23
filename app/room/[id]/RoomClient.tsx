@@ -435,7 +435,7 @@ export default function RoomClient({ roomId, initialGame, playerName }: RoomClie
 
             <div className="text-center mb-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-                    Round {game?.currentRound} - {getRoundPhase(game?.currentRound - 1)}
+                    Round {game?.currentRound} - {getRoundPhase((game?.currentRound ?? 0) - 1)}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400">Cards this round: {game?.currentTricks}</p>
             </div>
